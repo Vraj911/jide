@@ -31,43 +31,72 @@ export function ThreeBackground({ variant = "particles" }: ThreeBackgroundProps)
     let material: THREE.PointsMaterial;
 
     if (variant === "particles") {
-      // Particle system
+      // Intense particle network system
       geometry = new THREE.BufferGeometry();
-      const particlesCount = 1000;
+      const particlesCount = 3000;
       const posArray = new Float32Array(particlesCount * 3);
 
       for (let i = 0; i < particlesCount * 3; i++) {
-        posArray[i] = (Math.random() - 0.5) * 10;
+        posArray[i] = (Math.random() - 0.5) * 20;
       }
 
       geometry.setAttribute("position", new THREE.BufferAttribute(posArray, 3));
 
       material = new THREE.PointsMaterial({
-        size: 0.02,
+        size: 0.03,
         color: 0x00d9ff,
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.8,
       });
 
       particles = new THREE.Points(geometry, material);
       scene.add(particles);
+
+      // Add connecting lines for network effect
+      const lineGeometry = new THREE.BufferGeometry();
+      const lineMaterial = new THREE.LineBasicMaterial({
+        color: 0x00d9ff,
+        transparent: true,
+        opacity: 0.2,
+      });
+      
+      const linePositions: number[] = [];
+      for (let i = 0; i < particlesCount * 3; i += 30) {
+        linePositions.push(
+          posArray[i],
+          posArray[i + 1],
+          posArray[i + 2],
+          posArray[i + 3] || posArray[0],
+          posArray[i + 4] || posArray[1],
+          posArray[i + 5] || posArray[2]
+        );
+      }
+      
+      lineGeometry.setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(linePositions, 3)
+      );
+      const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
+      scene.add(lines);
     } else {
-      // Code matrix style
+      // Intense code matrix style
       geometry = new THREE.BufferGeometry();
-      const particlesCount = 500;
+      const particlesCount = 2000;
       const posArray = new Float32Array(particlesCount * 3);
 
-      for (let i = 0; i < particlesCount * 3; i++) {
-        posArray[i] = (Math.random() - 0.5) * 15;
+      for (let i = 0; i < particlesCount * 3; i += 3) {
+        posArray[i] = (Math.random() - 0.5) * 25;
+        posArray[i + 1] = (Math.random() - 0.5) * 25;
+        posArray[i + 2] = (Math.random() - 0.5) * 25;
       }
 
       geometry.setAttribute("position", new THREE.BufferAttribute(posArray, 3));
 
       material = new THREE.PointsMaterial({
-        size: 0.05,
-        color: 0x00d9ff,
+        size: 0.06,
+        color: 0x00ff00,
         transparent: true,
-        opacity: 0.4,
+        opacity: 0.7,
       });
 
       particles = new THREE.Points(geometry, material);
@@ -95,12 +124,12 @@ export function ThreeBackground({ variant = "particles" }: ThreeBackgroundProps)
     const animate = () => {
       requestAnimationFrame(animate);
 
-      particles.rotation.x += 0.0005;
-      particles.rotation.y += 0.0005;
+      particles.rotation.x += 0.001;
+      particles.rotation.y += 0.002;
 
-      // Smooth mouse interaction
-      camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.05;
-      camera.position.y += (mouseY * 0.5 - camera.position.y) * 0.05;
+      // More intense mouse interaction
+      camera.position.x += (mouseX * 1 - camera.position.x) * 0.08;
+      camera.position.y += (mouseY * 1 - camera.position.y) * 0.08;
       camera.lookAt(scene.position);
 
       renderer.render(scene, camera);
@@ -121,7 +150,7 @@ export function ThreeBackground({ variant = "particles" }: ThreeBackgroundProps)
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 -z-10 opacity-30"
+      className="fixed inset-0 -z-10 opacity-60"
       style={{ pointerEvents: "none" }}
     />
   );
