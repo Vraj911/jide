@@ -3,18 +3,17 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { ThreeBackground } from "@/components/ThreeBackground";
 import { Code2, Zap, Layers, ArrowRight, Terminal, Play } from "lucide-react";
 
 export default function Index() {
   return (
     <div className="min-h-screen flex flex-col">
+      <ThreeBackground variant="particles" />
       <Header />
       
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-4 relative overflow-hidden">
-        {/* Animated background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-purple-500/10 animate-pulse" style={{ animationDuration: '8s' }} />
-        
         <div className="container mx-auto relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left: Hero Content */}

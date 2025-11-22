@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Code2 } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function Header() {
   return (
@@ -23,6 +24,7 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-3">
+          <ThemeToggle />
           <Link to="/auth/login">
             <Button variant="ghost" size="sm">
               Login
