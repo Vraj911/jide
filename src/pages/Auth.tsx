@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { ThreeBackground } from "@/components/ThreeBackground";
 import { Github, Chrome, Code2 } from "lucide-react";
 
 interface AuthProps {
@@ -23,24 +24,10 @@ export default function Auth({ mode }: AuthProps) {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
+      <ThreeBackground variant="code" />
+      
       {/* Left: Animated Background */}
-      <div className="hidden lg:flex items-center justify-center bg-gradient-to-br from-primary/20 via-purple-500/20 to-background relative overflow-hidden">
-        <div className="absolute inset-0 opacity-30">
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute text-primary/20 text-2xl font-mono"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animation: `float ${3 + Math.random() * 4}s ease-in-out infinite`,
-                animationDelay: `${Math.random() * 2}s`,
-              }}
-            >
-              {["0", "1", "{", "}", "print", "func"][Math.floor(Math.random() * 6)]}
-            </div>
-          ))}
-        </div>
+      <div className="hidden lg:flex items-center justify-center relative overflow-hidden">
         <div className="relative z-10 text-center space-y-4 p-8">
           <Code2 className="h-20 w-20 text-primary mx-auto glow-primary-lg" />
           <h2 className="text-4xl font-bold">Welcome to J++ IDE</h2>
@@ -51,7 +38,7 @@ export default function Auth({ mode }: AuthProps) {
       </div>
 
       {/* Right: Auth Form */}
-      <div className="flex items-center justify-center p-8 bg-background">
+      <div className="flex items-center justify-center p-8 relative">
         <Card className="w-full max-w-md p-8 glass-panel">
           <div className="space-y-6">
             <div className="text-center space-y-2">
