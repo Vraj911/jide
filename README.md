@@ -1,73 +1,78 @@
-# Welcome to your Lovable project
+# J++ IDE
 
-## Project info
+A modern web-based IDE for the J++ programming language. Built with Next.js App Router and JavaScript.
 
-**URL**: https://lovable.dev/projects/4cb3f28d-07ce-4267-ac77-788a21babc94
+## Project Structure
 
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/4cb3f28d-07ce-4267-ac77-788a21babc94) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```
+jide/
+├── app/                    # Next.js App Router pages
+│   ├── layout.js          # Root layout
+│   ├── page.js            # Home page
+│   ├── ide/
+│   │   └── page.js        # IDE page
+│   ├── docs/
+│   │   └── page.js        # Documentation page
+│   ├── auth/
+│   │   ├── login/
+│   │   │   └── page.js    # Login page
+│   │   └── signup/
+│   │       └── page.js    # Signup page
+│   └── not-found.js       # 404 page
+├── components/            # React components
+│   ├── ui/                # shadcn/ui components (convert .tsx to .jsx)
+│   ├── Header.jsx
+│   ├── Footer.jsx
+│   ├── Editor.jsx
+│   └── ...
+├── lib/                   # Utility libraries
+│   ├── jpp/               # J++ compiler (not connected yet)
+│   └── monacoConfig.js    # Monaco editor config
+├── src/
+│   └── index.css          # Global styles
+└── package.json
 ```
 
-**Edit a file directly in GitHub**
+## Getting Started
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Prerequisites
 
-**Use GitHub Codespaces**
+- Node.js 18+ and npm/yarn/pnpm
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Installation
 
-## What technologies are used for this project?
+```bash
+# Install dependencies
+npm install
 
-This project is built with:
+# Start development server
+npm run dev
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+# Build for production
+npm run build
 
-## How can I deploy this project?
+# Start production server
+npm start
+```
 
-Simply open [Lovable](https://lovable.dev/projects/4cb3f28d-07ce-4267-ac77-788a21babc94) and click on Share -> Publish.
+The app will be available at `http://localhost:3000`
 
-## Can I connect a custom domain to my Lovable project?
+## Technology Stack
 
-Yes, you can!
+- **Next.js 14** - React framework with App Router
+- **JavaScript** - Pure JS (no TypeScript)
+- **Monaco Editor** - Code editor
+- **Tailwind CSS** - Styling
+- **shadcn/ui** - UI components
+- **Three.js** - 3D backgrounds
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Notes
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- All pages are in the `app/` directory following Next.js App Router conventions
+- Components are in JavaScript (.jsx) format
+- The J++ compiler is in `lib/jpp/` but not currently connected to the IDE
+- UI components in `src/components/ui/` need to be converted from .tsx to .jsx (or they may work as-is)
+
+## License
+
+MIT
