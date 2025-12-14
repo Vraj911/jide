@@ -1,44 +1,81 @@
 "use client";
-
 import { useEffect, useRef } from "react";
 import MonacoEditor from "@monaco-editor/react";
-import { jppLanguageConfig, jppMonarchTokens, jppTheme } from "@/lib/monacoConfig";
+import {
+  jppLanguageConfig,
+  jppMonarchTokens,
+  jppTheme,
+  jppLightTheme
+} from "@/lib/monacoConfig";
 
-export function Editor({ value, onChange, readOnly = false, language = "jpp" }) {
+let themesRegistered = false;
+
+export function Editor({
+  value,
+  onChange,
+  readOnly = false,
+  language = "jpp",
+  theme = "dark",
+  fontSize = 14,
+  wordWrap = "on",
+  minimap = true,
+}) {
   const editorRef = useRef(null);
+  const monacoRef = useRef(null);
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
 
-    // Register J++ language only if it hasn't been registered
-    if (!monaco.languages.getLanguages().some((lang) => lang.id === 'jpp')) {
+    if (!monaco.languages.getLanguages().some(lang => lang.id === "jpp")) {
       monaco.languages.register(jppLanguageConfig);
-      monaco.languages.setMonarchTokensProvider('jpp', jppMonarchTokens);
-      monaco.editor.defineTheme('jpp-dark', jppTheme);
+      monaco.languages.setMonarchTokensProvider("jpp", jppMonarchTokens);
     }
 
-    // Apply theme
-    monaco.editor.setTheme('jpp-dark');
+    if (!themesRegistered) {
+      monaco.editor.defineTheme("jpp-dark", jppTheme);
+      monaco.editor.defineTheme("jpp-light", jppLightTheme);
+      themesRegistered = true;
+    }
+
+    monaco.editor.setTheme(theme === "dark" ? "jpp-dark" : "jpp-light");
   };
+
+  useEffect(() => {
+    if (monacoRef.current) {
+      monacoRef.current.editor.setTheme(
+        theme === "dark" ? "jpp-dark" : "jpp-light"
+      );
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.updateOptions({
+        fontSize,
+        wordWrap: wordWrap === "on" ? "on" : "off",
+        minimap: { enabled: minimap && !readOnly },
+      });
+    }
+  }, [fontSize, wordWrap, minimap, readOnly]);
 
   return (
     <MonacoEditor
       height="100%"
       language={language}
       value={value}
-      onChange={(value) => onChange(value || "")}
+      onChange={value => onChange(value || "")}
       onMount={handleEditorDidMount}
       options={{
         readOnly,
-        minimap: { enabled: !readOnly },
-        fontSize: 14,
+        fontSize,
         fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
         lineNumbers: "on",
         scrollBeyondLastLine: false,
         automaticLayout: true,
         tabSize: 2,
-        wordWrap: "on",
-        theme: "jpp-dark",
+        wordWrap: wordWrap === "on" ? "on" : "off",
+        minimap: { enabled: minimap && !readOnly },
       }}
     />
   );

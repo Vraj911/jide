@@ -1,8 +1,6 @@
 "use client";
-
 import Link from "next/link";
 import { Github, Book, Mail } from "lucide-react";
-
 export function Footer() {
   return (
     <footer className="border-t border-border/50 bg-card/50 backdrop-blur-sm">
@@ -11,7 +9,6 @@ export function Footer() {
           <div className="text-sm text-muted-foreground">
             Built with Next.js, Monaco, Tailwind & Shadcn
           </div>
-          
           <div className="flex items-center gap-6">
             <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
               <Github className="h-5 w-5" />

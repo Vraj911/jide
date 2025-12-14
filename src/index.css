@@ -1,11 +1,6 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
     --background: 220 20% 97%;
@@ -28,9 +23,7 @@ All colors MUST be HSL.
     --input: 220 15% 88%;
     --ring: 195 100% 50%;
     --radius: 0.5rem;
-    
-    /* IDE-specific tokens */
-    --editor-bg: 218 20% 18%;
+        --editor-bg: 218 20% 18%;
     --editor-fg: 220 15% 85%;
     --panel-bg: 218 20% 15%;
     --panel-border: 218 15% 25%;
@@ -43,7 +36,6 @@ All colors MUST be HSL.
     --glow-primary: 195 100% 50%;
     --glow-secondary: 270 80% 60%;
   }
-
   .dark {
     --background: 218 20% 12%;
     --foreground: 220 15% 90%;
@@ -64,9 +56,7 @@ All colors MUST be HSL.
     --border: 218 15% 25%;
     --input: 218 15% 25%;
     --ring: 195 100% 55%;
-    
-    /* IDE-specific tokens */
-    --editor-bg: 218 20% 18%;
+        --editor-bg: 218 20% 18%;
     --editor-fg: 220 15% 85%;
     --panel-bg: 218 20% 15%;
     --panel-border: 218 15% 25%;
@@ -80,27 +70,22 @@ All colors MUST be HSL.
     --glow-secondary: 270 80% 60%;
   }
 }
-
 @layer base {
   * {
     @apply border-border;
   }
-
   body {
     @apply bg-background text-foreground font-mono antialiased;
   }
 }
-
 @layer utilities {
   .glow-primary {
     box-shadow: 0 0 20px hsl(var(--glow-primary) / 0.3);
   }
-  
   .glow-primary-lg {
     box-shadow: 0 0 40px hsl(var(--glow-primary) / 0.4),
                 0 0 80px hsl(var(--glow-primary) / 0.2);
   }
-  
   .text-gradient {
     background: linear-gradient(135deg, 
       hsl(var(--primary)), 
@@ -109,7 +94,6 @@ All colors MUST be HSL.
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
-  
   .glass-panel {
     background: hsl(var(--card) / 0.5);
     backdrop-filter: blur(12px);

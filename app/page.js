@@ -1,5 +1,4 @@
 "use client";
-
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -7,18 +6,14 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ThreeBackground } from "@/components/ThreeBackground";
 import { Code2, Zap, Layers, ArrowRight, Terminal, Play } from "lucide-react";
-
 export default function Home() {
   return (
     <div className="min-h-screen flex flex-col">
       <ThreeBackground variant="particles" />
       <Header />
-      
-      {/* Hero Section */}
       <section className="pt-32 pb-20 px-4 relative overflow-hidden">
         <div className="container mx-auto relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left: Hero Content */}
             <div className="space-y-8">
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight">
                 Build. Compile.{" "}
@@ -26,12 +21,10 @@ export default function Home() {
                 <br />
                 In Your Browser.
               </h1>
-              
               <p className="text-xl text-muted-foreground max-w-lg">
                 A modern web-based IDE for J++, your custom language built on JavaScript. 
                 Write, compile, and execute code instantly with powerful editor features.
               </p>
-
               <div className="flex flex-wrap gap-4">
                 <Link href="/ide">
                   <Button size="lg" className="glow-primary-lg group">
@@ -47,8 +40,6 @@ export default function Home() {
                 </Link>
               </div>
             </div>
-
-            {/* Right: Animated Code Preview */}
             <div className="glass-panel rounded-xl p-6 space-y-4">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Terminal className="h-4 w-4" />
@@ -82,14 +73,11 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      {/* Features Section */}
       <section className="py-20 px-4 bg-card/30">
         <div className="container mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
             Everything You Need to Code
-          </h2>
-          
+          </h2>   
           <div className="grid md:grid-cols-3 gap-8">
             <Card className="p-6 space-y-4 hover:glow-primary transition-all duration-300 bg-card/50 backdrop-blur">
               <div className="rounded-lg bg-primary/10 w-12 h-12 flex items-center justify-center">
@@ -101,7 +89,6 @@ export default function Home() {
                 and all the features you love from VS Code.
               </p>
             </Card>
-
             <Card className="p-6 space-y-4 hover:glow-primary transition-all duration-300 bg-card/50 backdrop-blur">
               <div className="rounded-lg bg-primary/10 w-12 h-12 flex items-center justify-center">
                 <Zap className="h-6 w-6 text-primary" />
@@ -112,7 +99,6 @@ export default function Home() {
                 and execute it right in your browser with live output.
               </p>
             </Card>
-
             <Card className="p-6 space-y-4 hover:glow-primary transition-all duration-300 bg-card/50 backdrop-blur">
               <div className="rounded-lg bg-primary/10 w-12 h-12 flex items-center justify-center">
                 <Layers className="h-6 w-6 text-primary" />
@@ -126,7 +112,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
       <Footer />
     </div>
   );
