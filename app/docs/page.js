@@ -3,14 +3,82 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Card } from "@/components/ui/card";
 import { ThreeBackground } from "@/components/ThreeBackground";
-import { Book, Code, Zap, Lightbulb } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Book, Code, Zap, Lightbulb, MessageSquare, X, Maximize2 } from "lucide-react";
 export default function Docs() {
+  // Chatbot UI state (client-side)
+  const [chatOpen, setChatOpen] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content: string, id?: string }
+  const messagesRef = useRef(null);
+
+  // Scroll messages into view when new messages arrive
+  useEffect(() => {
+    if (messagesRef.current) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+    }
+  }, [messages, chatOpen, maximized]);
+
+  // sendMessage handles capturing the prompt and sending to backend LLM service.
+  // Flow (frontend):
+  // 1) Add user's message to `messages`.
+  // 2) Add an assistant placeholder message and start streaming the LLM response into it.
+  // 3) Example backend contract (to be implemented server-side by you):
+  //    POST /api/chat
+  //    body: { conversationId?, messages: [{role, content}], docId?, docContext? }
+  //    Response: streaming text chunks (SSE or chunked transfer) or final JSON with full content.
+  const sendMessage = async () => {
+    if (!input.trim()) return;
+    const userMessage = { role: "user", content: input.trim(), id: Date.now() + "-u" };
+    setMessages((m) => [...m, userMessage]);
+    setInput("");
+    const assistantId = Date.now() + "-a";
+    setMessages((m) => [...m, { role: "assistant", content: "", id: assistantId }]);
+    setChatOpen(true);
+
+    // ---- Example streaming implementation (commented) ----
+    // const res = await fetch("/api/chat", {
+    //   method: "POST",
+    //   headers: { "Content-Type": "application/json" },
+    //   body: JSON.stringify({
+    //     conversationId: "docs-"+window.location.pathname,
+    //     messages: [...messages, userMessage],
+    //     docContext: { path: window.location.pathname, title: document.title }
+    //   }),
+    // });
+    // if (!res.body) return;
+    // const reader = res.body.getReader();
+    // const decoder = new TextDecoder();
+    // let done = false;
+    // while (!done) {
+    //   const { value, done: streamDone } = await reader.read();
+    //   if (value) {
+    //     const chunk = decoder.decode(value);
+    //     // Append chunk to assistant message
+    //     setMessages((prev) =>
+    //       prev.map((msg) => (msg.id === assistantId ? { ...msg, content: msg.content + chunk } : msg))
+    //     );
+    //   }
+    //   done = streamDone;
+    // }
+    // ---- End example streaming implementation ----
+
+    // Temporary stub while backend is implemented:
+    setTimeout(() => {
+      const reply = "Thanks — this is a placeholder reply. Implement POST /api/chat to connect to a real LLM and stream tokens back into this message.";
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === assistantId ? { ...msg, content: reply } : msg))
+      );
+    }, 700);
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <ThreeBackground variant="particles" />
       <Header />
       <div className="flex-1 pt-16">
-        <div className="container mx-auto px-4 py-12">
+        <div className="container mx-auto px-4 py-12 relative">
           <div className="max-w-4xl mx-auto space-y-12">
             <div className="space-y-4">
               <h1 className="text-5xl font-bold text-gradient">Documentation</h1>
@@ -333,6 +401,86 @@ export default function Docs() {
           </div>
         </div>
       </div>
+
+      {/* Chat UI: floating button and slide-in sidebar (keeps original page layout unchanged) */}
+      {/* Floating toggle button */}
+      <div className="absolute right-6 bottom-8 z-50 pointer-events-none">
+        <div className="pointer-events-auto">
+          <button
+            onClick={() => setChatOpen((o) => !o)}
+            aria-label="Open Docs Assistant"
+            className="flex items-center justify-center w-14 h-14 rounded-full bg-primary text-white shadow-lg hover:scale-105 transition-transform"
+          >
+            <MessageSquare className="w-6 h-6" />
+          </button>
+        </div>
+      </div>
+
+      {/* Sidebar / panel */}
+      {chatOpen && (
+        <div
+          className={`absolute right-6 bottom-24 z-50 pointer-events-auto ${
+            maximized ? "w-[95%] h-[92%] sm:w-[720px] sm:h-[80%]" : "w-[380px] h-[520px]"
+          }`}
+        >
+          <div className="flex flex-col h-full bg-card/90 rounded-lg shadow-xl border border-border overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-muted/10">
+              <div className="flex items-center gap-3">
+                <MessageSquare className="w-5 h-5 text-primary" />
+                <div>
+                  <div className="font-semibold">Docs Assistant</div>
+                  <div className="text-xs text-muted-foreground">Ask questions about the documentation</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setMaximized((m) => !m)} className="p-1 rounded hover:bg-muted/10">
+                  <Maximize2 className="w-4 h-4" />
+                </button>
+                <button onClick={() => setChatOpen(false)} className="p-1 rounded hover:bg-muted/10">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div ref={messagesRef} className="p-3 overflow-y-auto flex-1 space-y-3 text-sm">
+              {messages.length === 0 && (
+                <div className="text-muted-foreground text-sm">Hi! Ask me anything about these docs—e.g., "How does the '.' operator work?"</div>
+              )}
+              {messages.map((m) => (
+                <div key={m.id} className={`rounded-lg p-3 ${m.role === "user" ? "bg-muted/5 self-end" : "bg-editor-bg/30"}`}>
+                  <div className="text-sm whitespace-pre-wrap">{m.content}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="px-3 py-2 border-t border-muted/10">
+              {/* The prompt input that will be sent to backend.
+                  Comment: This is where the user's text is captured (`input`) and passed to sendMessage().
+                  Implement backend endpoint at POST /api/chat that accepts { messages, docContext } and streams response back. */}
+              <div className="flex items-center gap-2">
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Submit on Enter (without Shift); allow Shift+Enter for newline
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  autoFocus
+                  tabIndex={0}
+                  aria-label="Chat input"
+                  placeholder="Ask about the docs..."
+                  className="flex-1 min-h-[44px] max-h-28 resize-none bg-transparent outline-none text-sm text-muted-foreground p-2 rounded"
+                />
+                <button onClick={sendMessage} className="px-4 py-2 bg-primary text-white rounded hover:opacity-95">Send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </div>
   );

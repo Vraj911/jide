@@ -624,6 +624,12 @@ video {
 .inset-0 {
   inset: 0px;
 }
+.bottom-24 {
+  bottom: 6rem;
+}
+.bottom-8 {
+  bottom: 2rem;
+}
 .left-0 {
   left: 0px;
 }
@@ -638,6 +644,9 @@ video {
 }
 .right-4 {
   right: 1rem;
+}
+.right-6 {
+  right: 1.5rem;
 }
 .top-0 {
   top: 0px;
@@ -724,6 +733,9 @@ video {
 .h-12 {
   height: 3rem;
 }
+.h-14 {
+  height: 3.5rem;
+}
 .h-16 {
   height: 4rem;
 }
@@ -748,17 +760,29 @@ video {
 .h-\[1px\] {
   height: 1px;
 }
+.h-\[520px\] {
+  height: 520px;
+}
+.h-\[92\%\] {
+  height: 92%;
+}
 .h-full {
   height: 100%;
 }
 .h-screen {
   height: 100vh;
 }
+.max-h-28 {
+  max-height: 7rem;
+}
 .max-h-\[80vh\] {
   max-height: 80vh;
 }
 .max-h-screen {
   max-height: 100vh;
+}
+.min-h-\[44px\] {
+  min-height: 44px;
 }
 .min-h-screen {
   min-height: 100vh;
@@ -774,6 +798,9 @@ video {
 }
 .w-12 {
   width: 3rem;
+}
+.w-14 {
+  width: 3.5rem;
 }
 .w-2 {
   width: 0.5rem;
@@ -795,6 +822,12 @@ video {
 }
 .w-\[1px\] {
   width: 1px;
+}
+.w-\[380px\] {
+  width: 380px;
+}
+.w-\[95\%\] {
+  width: 95%;
 }
 .w-full {
   width: 100%;
@@ -842,6 +875,9 @@ video {
 }
 .cursor-pointer {
   cursor: pointer;
+}
+.resize-none {
+  resize: none;
 }
 .resize {
   resize: both;
@@ -956,6 +992,9 @@ video {
 .divide-border\/50 > :not([hidden]) ~ :not([hidden]) {
   border-color: hsl(var(--border) / 0.5);
 }
+.self-end {
+  align-self: flex-end;
+}
 .overflow-auto {
   overflow: auto;
 }
@@ -1016,6 +1055,9 @@ video {
 .border-input {
   border-color: hsl(var(--input));
 }
+.border-muted\/10 {
+  border-color: hsl(var(--muted) / 0.1);
+}
 .border-panel-border {
   border-color: hsl(var(--panel-border));
 }
@@ -1040,14 +1082,23 @@ video {
 .bg-card\/50 {
   background-color: hsl(var(--card) / 0.5);
 }
+.bg-card\/90 {
+  background-color: hsl(var(--card) / 0.9);
+}
 .bg-destructive {
   background-color: hsl(var(--destructive));
 }
 .bg-editor-bg {
   background-color: hsl(var(--editor-bg));
 }
+.bg-editor-bg\/30 {
+  background-color: hsl(var(--editor-bg) / 0.3);
+}
 .bg-muted {
   background-color: hsl(var(--muted));
+}
+.bg-muted\/5 {
+  background-color: hsl(var(--muted) / 0.05);
 }
 .bg-panel-bg {
   background-color: hsl(var(--panel-bg));
@@ -1079,6 +1130,12 @@ video {
 }
 .p-1 {
   padding: 0.25rem;
+}
+.p-2 {
+  padding: 0.5rem;
+}
+.p-3 {
+  padding: 0.75rem;
 }
 .p-4 {
   padding: 1rem;
@@ -1262,6 +1319,10 @@ video {
 .text-terminal-fg {
   color: hsl(var(--terminal-fg));
 }
+.text-white {
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
 .underline {
   text-decoration-line: underline;
 }
@@ -1294,6 +1355,15 @@ video {
   --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+.shadow-xl {
+  --tw-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --tw-shadow-colored: 0 20px 25px -5px var(--tw-shadow-color), 0 8px 10px -6px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+.outline-none {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
 }
 .outline {
   outline-style: solid;
@@ -1425,6 +1495,11 @@ video {
 .placeholder\:text-muted-foreground::placeholder {
   color: hsl(var(--muted-foreground));
 }
+.hover\:scale-105:hover {
+  --tw-scale-x: 1.05;
+  --tw-scale-y: 1.05;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
 .hover\:bg-accent:hover {
   background-color: hsl(var(--accent));
 }
@@ -1433,6 +1508,9 @@ video {
 }
 .hover\:bg-destructive\/90:hover {
   background-color: hsl(var(--destructive) / 0.9);
+}
+.hover\:bg-muted\/10:hover {
+  background-color: hsl(var(--muted) / 0.1);
 }
 .hover\:bg-primary:hover {
   background-color: hsl(var(--primary));
@@ -1463,6 +1541,9 @@ video {
 }
 .hover\:opacity-100:hover {
   opacity: 1;
+}
+.hover\:opacity-95:hover {
+  opacity: 0.95;
 }
 .hover\:glow-primary:hover {
     box-shadow: 0 0 20px hsl(var(--glow-primary) / 0.3);
@@ -1700,6 +1781,14 @@ video {
 
   .sm\:top-auto {
     top: auto;
+  }
+
+  .sm\:h-\[80\%\] {
+    height: 80%;
+  }
+
+  .sm\:w-\[720px\] {
+    width: 720px;
   }
 
   .sm\:flex-row {
