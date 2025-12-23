@@ -12,6 +12,10 @@ export default function Docs() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content: string, id?: string }
   const messagesRef = useRef(null);
+  const [avatarVisible, setAvatarVisible] = useState(false);
+  // Prevent hydration mismatch: render interactive chat UI only after client mounts
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Scroll messages into view when new messages arrive
   useEffect(() => {
@@ -19,6 +23,16 @@ export default function Docs() {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
     }
   }, [messages, chatOpen, maximized]);
+
+  // Small emergence animation for DOT avatar when chat opens
+  useEffect(() => {
+    if (chatOpen) {
+      // Delay slightly so the panel mounts first
+      setTimeout(() => setAvatarVisible(true), 50);
+    } else {
+      setAvatarVisible(false);
+    }
+  }, [chatOpen]);
 
   // sendMessage handles capturing the prompt and sending to backend LLM service.
   // Flow (frontend):
@@ -405,19 +419,32 @@ export default function Docs() {
       {/* Chat UI: floating button and slide-in sidebar (keeps original page layout unchanged) */}
       {/* Floating toggle button */}
       <div className="absolute right-6 bottom-8 z-50 pointer-events-none">
-        <div className="pointer-events-auto">
+        <div className="pointer-events-auto group relative">
           <button
             onClick={() => setChatOpen((o) => !o)}
-            aria-label="Open Docs Assistant"
+            aria-label="Open DOT"
+            aria-describedby="dot-tooltip"
+            title="Open DOT"
             className="flex items-center justify-center w-14 h-14 rounded-full bg-primary text-white shadow-lg hover:scale-105 transition-transform"
           >
             <MessageSquare className="w-6 h-6" />
           </button>
+
+          {/* Tooltip shown on hover (translucent with subtle blur + arrow) */}
+          <div
+            id="dot-tooltip"
+            role="tooltip"
+            className="absolute left-1/2 -bottom-16 -translate-x-1/2 w-max rounded-md bg-white/10 dark:bg-black/60 text-white px-3 py-1 text-xs font-medium shadow-lg opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all backdrop-blur-sm border border-white/5"
+          >
+            Ask DOT...
+            {/* Arrow */}
+            <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-3 h-3 rotate-45 bg-white/10 dark:bg-black/60 border border-white/5" />
+          </div>
         </div>
       </div>
 
-      {/* Sidebar / panel */}
-      {chatOpen && (
+      {/* Sidebar / panel (render only after client mount to avoid hydration mismatch) */}
+      {mounted && chatOpen && (
         <div
           className={`absolute right-6 bottom-24 z-50 pointer-events-auto ${
             maximized ? "w-[95%] h-[92%] sm:w-[720px] sm:h-[80%]" : "w-[380px] h-[520px]"
@@ -426,10 +453,13 @@ export default function Docs() {
           <div className="flex flex-col h-full bg-card/90 rounded-lg shadow-xl border border-border overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2 border-b border-muted/10">
               <div className="flex items-center gap-3">
-                <MessageSquare className="w-5 h-5 text-primary" />
+                <img
+                  src="/DOT.png"
+                  alt="DOT avatar"
+                  className={`w-8 h-8 rounded-full object-cover border border-muted/20 transform transition-all duration-300 ease-out ${avatarVisible ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`}
+                />
                 <div>
-                  <div className="font-semibold">Docs Assistant</div>
-                  <div className="text-xs text-muted-foreground">Ask questions about the documentation</div>
+                  <div className="font-semibold">DOT</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -444,7 +474,7 @@ export default function Docs() {
 
             <div ref={messagesRef} className="p-3 overflow-y-auto flex-1 space-y-3 text-sm">
               {messages.length === 0 && (
-                <div className="text-muted-foreground text-sm">Hi! Ask me anything about these docs—e.g., "How does the '.' operator work?"</div>
+                <div className="text-muted-foreground text-sm">Hey J++ dev, how may i help you</div>
               )}
               {messages.map((m) => (
                 <div key={m.id} className={`rounded-lg p-3 ${m.role === "user" ? "bg-muted/5 self-end" : "bg-editor-bg/30"}`}>
