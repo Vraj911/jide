@@ -1,0 +1,178 @@
+{
+  "info": {
+    "name": "JIDE - API Execute Tests",
+    "_postman_id": "f2c8a8b4-0000-0000-0000-000000000000",
+    "description": "Tests for POST /api/execute (J++ compiler + runner)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Execute - Valid code",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"ye a = 5\nbol a\"\n}",
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/execute",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "execute"
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('success is true', () => pm.expect(json.success).to.eql(true));",
+              "pm.test('output contains 5', () => pm.expect(json.output && json.output.trim()).to.eql('5'));",
+              "pm.test('no errors', () => pm.expect(json.errors).to.be.an('array').that.is.empty);
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Execute - Missing code (400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/execute",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "execute"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+              "const json = pm.response.json();",
+              "pm.test('success is false', () => pm.expect(json.success).to.eql(false));",
+              "pm.test('error message mentions Invalid request', () => pm.expect(json.errors[0]).to.include('Invalid request'));
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Execute - Compile error (undeclared variable)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"bol x\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/execute",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "execute"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('success is false', () => pm.expect(json.success).to.eql(false));",
+              "pm.test('errors array present', () => pm.expect(json.errors).to.be.an('array').that.is.not.empty);",
+              "pm.test('error mentions variable used before declaration', () => pm.expect(JSON.stringify(json.errors)).to.include('used before declaration'))
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Execute - Execution error (optional)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"ye a = 1\nbol (a + (" + "\"unfin\" + ") )\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/execute",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "execute"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// This test is permissive because J++ type checking prevents most runtime errors.",
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.test('Either success true or runtime errors reported', () => {",
+              "  pm.expect(json.success === true || (json.errors && json.errors.some(e => e.type === 'runtime'))).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

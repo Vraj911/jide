@@ -6,7 +6,15 @@ import { dirname, resolve } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
-const compileJPlusPlus = require(resolve(__dirname, '../../lib/jpp/compiler.js'));
+let compileJPlusPlus;
+try {
+  // Use a static path so Webpack can resolve the dependency at build time
+  compileJPlusPlus = require('../../../lib/jpp/compiler.js');
+} catch (e) {
+  // If loading fails in the server environment, log and keep null so we can return a 500 at request time
+  compileJPlusPlus = null;
+  console.error('Failed to load J++ compiler:', e && e.message ? e.message : e);
+}
 
 /**
  * POST /api/execute
@@ -19,6 +27,19 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const { code } = body;
+
+    if (!compileJPlusPlus) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: null,
+          output: null,
+          ast: null,
+          errors: [{ message: 'Server error: compiler not available', type: 'server' }]
+        },
+        { status: 500 }
+      );
+    }
 
     if (!code || typeof code !== 'string') {
       return NextResponse.json(
@@ -45,11 +66,11 @@ export async function POST(request) {
     // Execute the compiled JavaScript and capture output
     let output = '';
     let executionErrors = [];
+    let originalConsoleLog;
+    const logs = [];
     try {
       // Capture console.log output
-      const originalConsoleLog = console.log;
-      const logs = [];
-      
+      originalConsoleLog = console.log;
       console.log = (...args) => {
         logs.push(args.map(arg => 
           typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
@@ -57,13 +78,14 @@ export async function POST(request) {
       };
       const executeCode = new Function(compileResult.code);
       executeCode();
-            console.log = originalConsoleLog;
       output = logs.join('\n');
     } catch (execError) {
       executionErrors.push({
         message: execError instanceof Error ? execError.message : 'Runtime error occurred',
         type: 'runtime'
       });
+    } finally {
+      if (originalConsoleLog) console.log = originalConsoleLog;
     }
     return NextResponse.json({
       success: compileResult.success && executionErrors.length === 0,
