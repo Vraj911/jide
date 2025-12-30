@@ -20,6 +20,9 @@ export function Header() {
           <Link href="/docs" className="text-sm font-medium hover:text-primary transition-colors">
             Docs
           </Link>
+          <Link href="/contribute" className="text-sm font-medium hover:text-primary transition-colors">
+            Contribute
+          </Link>
           <Link href="/ide" className="text-sm font-medium hover:text-primary transition-colors">
             IDE
           </Link>
