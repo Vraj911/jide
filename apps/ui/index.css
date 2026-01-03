@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 220 15% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 15%;
+    --primary: 195 100% 50%;
+    --primary-foreground: 220 20% 10%;
+    --secondary: 220 15% 90%;
+    --secondary-foreground: 220 15% 15%;
+    --muted: 220 15% 92%;
+    --muted-foreground: 220 10% 45%;
+    --accent: 195 100% 50%;
+    --accent-foreground: 220 20% 10%;
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 195 100% 50%;
+    --radius: 0.5rem;
+        --editor-bg: 218 20% 18%;
+    --editor-fg: 220 15% 85%;
+    --panel-bg: 218 20% 15%;
+    --panel-border: 218 15% 25%;
+    --terminal-bg: 220 20% 10%;
+    --terminal-fg: 140 60% 65%;
+    --code-keyword: 195 100% 65%;
+    --code-string: 140 60% 65%;
+    --code-number: 30 100% 65%;
+    --code-comment: 220 10% 50%;
+    --glow-primary: 195 100% 50%;
+    --glow-secondary: 270 80% 60%;
+  }
+  .dark {
+    --background: 218 20% 12%;
+    --foreground: 220 15% 90%;
+    --card: 218 20% 15%;
+    --card-foreground: 220 15% 90%;
+    --popover: 218 20% 15%;
+    --popover-foreground: 220 15% 90%;
+    --primary: 195 100% 55%;
+    --primary-foreground: 220 20% 10%;
+    --secondary: 218 20% 20%;
+    --secondary-foreground: 220 15% 90%;
+    --muted: 218 15% 25%;
+    --muted-foreground: 220 10% 60%;
+    --accent: 195 100% 55%;
+    --accent-foreground: 220 20% 10%;
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 218 15% 25%;
+    --input: 218 15% 25%;
+    --ring: 195 100% 55%;
+        --editor-bg: 218 20% 18%;
+    --editor-fg: 220 15% 85%;
+    --panel-bg: 218 20% 15%;
+    --panel-border: 218 15% 25%;
+    --terminal-bg: 220 20% 10%;
+    --terminal-fg: 140 60% 65%;
+    --code-keyword: 195 100% 65%;
+    --code-string: 140 60% 65%;
+    --code-number: 30 100% 65%;
+    --code-comment: 220 10% 50%;
+    --glow-primary: 195 100% 50%;
+    --glow-secondary: 270 80% 60%;
+  }
+}
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-mono antialiased;
+  }
+}
+@layer utilities {
+  .glow-primary {
+    box-shadow: 0 0 20px hsl(var(--glow-primary) / 0.3);
+  }
+  .glow-primary-lg {
+    box-shadow: 0 0 40px hsl(var(--glow-primary) / 0.4),
+                0 0 80px hsl(var(--glow-primary) / 0.2);
+  }
+  .text-gradient {
+    background: linear-gradient(135deg, 
+      hsl(var(--primary)), 
+      hsl(var(--glow-secondary)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .glass-panel {
+    background: hsl(var(--card) / 0.5);
+    backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+}

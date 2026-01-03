@@ -1,0 +1,21 @@
+{
+  "name": "cli",
+  "root": "apps/cli",
+  "sourceRoot": "apps/cli/src",
+  "projectType": "application",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo \"No build step configured for CLI.\""
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node src/cli.js --help",
+        "cwd": "apps/cli"
+      }
+    }
+  }
+}

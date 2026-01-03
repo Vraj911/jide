@@ -1,4 +1,5 @@
 {
+  "private": true,
   "name": "@vraj9112/jpp",
   "version": "1.0.1",
   "description": "J++ – a tiny compiled language. CLI wrapper for the J++ compiler.",
@@ -9,8 +10,16 @@
   "engines": {
     "node": ">=18"
   },
+  "workspaces": [
+    "apps/*",
+    "libs/*"
+  ],
   "scripts": {
-    "test": "node ./src/cli.js --help"
+    "nx": "nx",
+    "start:ui": "nx run ui:serve",
+    "build:ui": "nx run ui:build",
+    "start:cli": "node ./apps/cli/src/cli.js",
+    "test": "node ./apps/cli/src/cli.js --help"
   },
   "author": "Vraj Shah shahvraj140@gmail.com",
   "license": "MIT",
@@ -22,9 +31,9 @@
   ],
   "files": [
     "bin",
-    "src/cli.js",
-    "src/commands",
-    "src/errors.js",
+    "apps/cli/src/cli.js",
+    "apps/cli/src/commands",
+    "apps/cli/src/errors.js",
     "lib/jpp/compiler.js",
     "lib/jpp/lexer.js",
     "lib/jpp/parser.js",
@@ -33,6 +42,13 @@
     "LICENSE"
   ],
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "sonner": "^2.0.7",
+    "three": "^0.182.0",
     "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@nrwl/workspace": "^15.0.0",
+    "nx": "^15.0.0"
   }
 }

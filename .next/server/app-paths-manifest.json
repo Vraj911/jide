@@ -1,7 +1,0 @@
-{
-  "/contribute/page": "app/contribute/page.js",
-  "/contribute/get-started/page": "app/contribute/get-started/page.js",
-  "/page": "app/page.js",
-  "/docs/page": "app/docs/page.js",
-  "/ide/page": "app/ide/page.js"
-}
