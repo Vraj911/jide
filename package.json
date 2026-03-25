@@ -19,6 +19,8 @@
     "start:ui": "nx run ui:serve",
     "build:ui": "nx run ui:build",
     "start:cli": "node ./apps/cli/src/cli.js",
+    "start:backend": "nx run backend:serve",
+    "build:backend": "nx run backend:build",
     "test": "node ./apps/cli/src/cli.js --help"
   },
   "author": "Vraj Shah shahvraj140@gmail.com",

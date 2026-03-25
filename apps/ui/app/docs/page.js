@@ -4,12 +4,11 @@ import { Footer } from "@/components/Footer";
 import { Card } from "@/components/ui/card";
 import { ThreeBackground } from "@/components/ThreeBackground";
 import React, { useState, useRef, useEffect } from "react";
-import { Book, Code, Zap, Lightbulb, MessageSquare, X, Maximize2 } from "lucide-react";
+import { Book, Code, Zap, Lightbulb, MessageSquare, X } from "lucide-react";
 
 export default function Docs() {
   // Chatbot UI state (client-side)
   const [chatOpen, setChatOpen] = useState(false);
-  const [maximized, setMaximized] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content: string, id?: string }
   const messagesRef = useRef(null);
@@ -24,7 +23,7 @@ export default function Docs() {
     if (messagesRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
     }
-  }, [messages, chatOpen, maximized]);
+  }, [messages, chatOpen]);
 
   // Small emergence animation for DOT avatar when chat opens
   useEffect(() => {
@@ -36,58 +35,52 @@ export default function Docs() {
     }
   }, [chatOpen]);
 
-  // sendMessage handles capturing the prompt and sending to backend LLM service.
+  // sendMessage handles capturing the prompt and sending to backend RAG service.
   // Flow (frontend):
   // 1) Add user's message to `messages`.
-  // 2) Add an assistant placeholder message and start streaming the LLM response into it.
-  // 3) Example backend contract (to be implemented server-side by you):
-  //    POST /api/chat
-  //    body: { conversationId?, messages: [{role, content}], docId?, docContext? }
-  //    Response: streaming text chunks (SSE or chunked transfer) or final JSON with full content.
+  // 2) Add an assistant placeholder message and request /api/chat.
+  // 3) Server responds with JSON: { answer, sources }.
   const sendMessage = async () => {
     if (!input.trim()) return;
     const userMessage = { role: "user", content: input.trim(), id: Date.now() + "-u" };
+    const nextMessages = [...messages, userMessage];
     setMessages((m) => [...m, userMessage]);
     setInput("");
     const assistantId = Date.now() + "-a";
     setMessages((m) => [...m, { role: "assistant", content: "", id: assistantId }]);
     setChatOpen(true);
 
-    // ---- Example streaming implementation (commented) ----
-    // const res = await fetch("/api/chat", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({
-    //     conversationId: "docs-"+window.location.pathname,
-    //     messages: [...messages, userMessage],
-    //     docContext: { path: window.location.pathname, title: document.title }
-    //   }),
-    // });
-    // if (!res.body) return;
-    // const reader = res.body.getReader();
-    // const decoder = new TextDecoder();
-    // let done = false;
-    // while (!done) {
-    //   const { value, done: streamDone } = await reader.read();
-    //   if (value) {
-    //     const chunk = decoder.decode(value);
-    //     // Append chunk to assistant message
-    //     setMessages((prev) =>
-    //       prev.map((msg) => (msg.id === assistantId ? { ...msg, content: msg.content + chunk } : msg))
-    //     );
-    //   }
-    //   done = streamDone;
-    // }
-    // ---- End example streaming implementation ----
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: nextMessages.map(({ role, content }) => ({ role, content })),
+          docContext: { path: window.location.pathname, title: document.title },
+        }),
+      });
 
-    // Temporary stub while backend is implemented:
-    setTimeout(() => {
-      const reply =
-        "Thanks — this is a placeholder reply. Implement POST /api/chat to connect to a real LLM and stream tokens back into this message.";
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Request failed");
+      }
+
+      const data = await res.json();
+      const sourcesText =
+        Array.isArray(data.sources) && data.sources.length > 0
+          ? `\n\nSources:\n${data.sources.map((s) => `- ${s}`).join("\n")}`
+          : "";
+      const reply = `${data.answer || "No answer returned."}${sourcesText}`;
+
       setMessages((prev) =>
         prev.map((msg) => (msg.id === assistantId ? { ...msg, content: reply } : msg))
       );
-    }, 700);
+    } catch (err) {
+      const reply = "Sorry, something went wrong while answering from the docs.";
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === assistantId ? { ...msg, content: reply } : msg))
+      );
+    }
   };
 
   return (
@@ -498,7 +491,7 @@ export default function Docs() {
 
       {/* Chat UI: floating button and slide-in sidebar (keeps original page layout unchanged) */}
       {/* Floating toggle button */}
-      <div className="absolute right-6 bottom-8 z-50 pointer-events-none">
+      <div className="fixed right-6 bottom-8 z-50 pointer-events-none">
         <div className="pointer-events-auto group relative">
           <button
             onClick={() => setChatOpen((o) => !o)}
@@ -526,9 +519,7 @@ export default function Docs() {
       {/* Sidebar / panel (render only after client mount to avoid hydration mismatch) */}
       {mounted && chatOpen && (
         <div
-          className={`absolute right-6 bottom-24 z-50 pointer-events-auto ${
-            maximized ? "w-[95%] h-[92%] sm:w-[720px] sm:h-[80%]" : "w-[380px] h-[520px]"
-          }`}
+          className="fixed z-50 pointer-events-auto right-6 bottom-24 w-[380px] h-[520px]"
         >
           <div className="flex flex-col h-full bg-card/90 rounded-lg shadow-xl border border-border overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2 border-b border-muted/10">
@@ -545,9 +536,6 @@ export default function Docs() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setMaximized((m) => !m)} className="p-1 rounded hover:bg-muted/10">
-                  <Maximize2 className="w-4 h-4" />
-                </button>
                 <button onClick={() => setChatOpen(false)} className="p-1 rounded hover:bg-muted/10">
                   <X className="w-4 h-4" />
                 </button>

@@ -5,21 +5,16 @@ This repository is an Nx monorepo that contains:
 - The **J++ language compiler** under `lib/jpp/`
 - A **CLI package** (`jpp`) that wraps the compiler
 - A **Next.js Web IDE** for writing and running J++ in the browser
+- A **NestJS backend** (MongoDB) for scalable APIs
 - Docker configuration for containerized deployments
 
 ---
 
 ## 1. J++ Language Overview
 
-J++ is a small, statically‑typed language that compiles to JavaScript. The core compiler lives entirely in `lib/jpp/` and is consumed by both the CLI and the Web IDE.
+Language documentation now lives in `jpp.md`.
 
-Key properties:
-
-- Strict, predictable operators (no implicit coercion)
-- Clear separation between numeric `+` and string concatenation `.`
-- Strong type checking with compile‑time errors
-
-For detailed language semantics and compiler internals, see `lib/jpp/README.md`.
+If you want compiler internals, see `lib/jpp/README.md`.
 
 ---
 
@@ -28,6 +23,7 @@ For detailed language semantics and compiler internals, see `lib/jpp/README.md`.
 Top‑level layout:
 
 - `apps/cli` – CLI source (`src/cli.js`, commands, errors)
+- `apps/backend` – NestJS backend (REST API + MongoDB)
 - `apps/ui/app` – Next.js app router (pages, API routes)
 - `apps/ui/components` – React UI components (buttons, cards, editor, header, etc.)
 - `apps/ui/hooks` – UI hooks (toast, theme helpers)
@@ -41,6 +37,7 @@ Top‑level layout:
 The Nx projects:
 
 - **cli** – Rooted at `apps/cli` (see `project.json`)
+- **backend** – Rooted at `apps/backend` (see `apps/backend/project.json`)
 - **ui** – Rooted at `apps/ui/app` (see `apps/ui/project.json`)
 
 ---
@@ -58,6 +55,47 @@ This installs Nx, the CLI dependencies, and the Next.js UI dependencies.
 ---
 
 ## 4. Running the Projects
+
+### 4.0 Backend (NestJS + MongoDB)
+
+The NestJS backend lives under `apps/backend` and reuses the existing compiler/LSP implementation from `lib/jpp/*`.
+
+Prereqs:
+
+- Node.js >= 18
+- MongoDB running locally (default connection: `mongodb://localhost:27017/jide`)
+
+Environment:
+
+- Copy `apps/backend/.env.example` to `apps/backend/.env` and adjust values as needed.
+
+Run dev server (from repo root):
+
+```bash
+npm install
+npm run start:backend
+```
+
+By default the backend listens on `http://localhost:4000`.
+
+Endpoints:
+
+- `POST /compile/run`
+- `POST /compile/check`
+- `POST /lsp/diagnostics`
+- `POST /lsp/hover`
+- `POST /lsp/completions`
+- `POST /lsp/symbols`
+- `POST /contributions`
+- `GET /contributions`
+- `GET /contributions/:name`
+- `POST /auth/signup`
+- `POST /auth/login`
+
+Notes:
+
+- Auth is implemented but NOT enforced yet (all endpoints remain public).
+- Code execution is currently unsafe-by-design (dynamic execution). It is wrapped in a service to allow future sandboxing.
 
 ### 4.1 Web IDE (Next.js)
 
