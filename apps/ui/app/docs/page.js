@@ -1,12 +1,17 @@
 "use client";
+import Link from "next/link";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { PlanToggle } from "@/components/PlanToggle";
+import { PremiumFeatureCard } from "@/components/PremiumFeatureCard";
 import { ThreeBackground } from "@/components/ThreeBackground";
 import React, { useState, useRef, useEffect } from "react";
-import { Book, Code, Zap, Lightbulb, MessageSquare, X } from "lucide-react";
+import { Book, Code, Zap, Lightbulb, MessageSquare, X, Lock, Sparkles, BadgeCheck } from "lucide-react";
 
 export default function Docs() {
+  const [plan, setPlan] = useState("free");
   // Chatbot UI state (client-side)
   const [chatOpen, setChatOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -91,10 +96,34 @@ export default function Docs() {
         <div className="container mx-auto px-4 py-12 relative">
           <div className="max-w-4xl mx-auto space-y-12">
             <div className="space-y-4">
-              <h1 className="text-5xl font-bold text-gradient">Documentation</h1>
-              <p className="text-xl text-muted-foreground">
-                Learn how to use J++ IDE and master the J++ language
-              </p>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    Premium Docs Preview
+                  </div>
+                  <h1 className="text-5xl font-bold text-gradient">Documentation</h1>
+                  <p className="text-xl text-muted-foreground">
+                    Learn how to use J++ IDE and master the J++ language
+                  </p>
+                </div>
+                <PlanToggle plan={plan} onChange={setPlan} />
+              </div>
+              <PremiumFeatureCard
+                title="DOT docs chatbot"
+                description="DOT remains visible on the docs page, but the conversational assistant experience is now presented as a paid feature."
+                enabled={plan === "paid"}
+                items={[
+                  {
+                    title: "Context-aware answers",
+                    description: "Answer documentation questions using the current docs content and cite relevant sections.",
+                  },
+                  {
+                    title: "Shared premium bundle",
+                    description: "The same paid subscription unlocks DOT in docs and LSP language tooling in the IDE.",
+                  },
+                ]}
+              />
             </div>
 
             <section className="space-y-6">
@@ -501,6 +530,11 @@ export default function Docs() {
             className="flex items-center justify-center w-14 h-14 rounded-full bg-primary text-white shadow-lg hover:scale-105 transition-transform"
           >
             <MessageSquare className="w-6 h-6" />
+            {plan === "free" && (
+              <span className="absolute -right-1 -top-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-black">
+                Pro
+              </span>
+            )}
           </button>
 
           {/* Tooltip shown on hover (translucent with subtle blur + arrow) */}
@@ -509,7 +543,7 @@ export default function Docs() {
             role="tooltip"
             className="absolute left-1/2 -bottom-16 -translate-x-1/2 w-max rounded-md bg-white/10 dark:bg-black/60 text-white px-3 py-1 text-xs font-medium shadow-lg opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all backdrop-blur-sm border border-white/5"
           >
-            Ask DOT...
+            {plan === "paid" ? "Ask DOT..." : "DOT is in paid plan"}
             {/* Arrow */}
             <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-3 h-3 rotate-45 bg-white/10 dark:bg-black/60 border border-white/5" />
           </div>
@@ -533,6 +567,9 @@ export default function Docs() {
                 />
                 <div>
                   <div className="font-semibold">DOT</div>
+                  <div className="text-xs text-muted-foreground">
+                    {plan === "paid" ? "Paid documentation assistant" : "Locked in free plan"}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -542,46 +579,82 @@ export default function Docs() {
               </div>
             </div>
 
-            <div ref={messagesRef} className="p-3 overflow-y-auto flex-1 space-y-3 text-sm">
-              {messages.length === 0 && (
-                <div className="text-muted-foreground text-sm">Hey J++ dev, how may i help you</div>
-              )}
-              {messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`rounded-lg p-3 ${m.role === "user" ? "bg-muted/5 self-end" : "bg-editor-bg/30"}`}
-                >
-                  <div className="text-sm whitespace-pre-wrap">{m.content}</div>
+            {plan === "paid" ? (
+              <>
+                <div ref={messagesRef} className="p-3 overflow-y-auto flex-1 space-y-3 text-sm">
+                  {messages.length === 0 && (
+                    <div className="text-muted-foreground text-sm">Hey J++ dev, how may I help you?</div>
+                  )}
+                  {messages.map((m) => (
+                    <div
+                      key={m.id}
+                      className={`rounded-lg p-3 ${m.role === "user" ? "bg-muted/5 self-end" : "bg-editor-bg/30"}`}
+                    >
+                      <div className="text-sm whitespace-pre-wrap">{m.content}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            <div className="px-3 py-2 border-t border-muted/10">
-              {/* The prompt input that will be sent to backend.
-                  Comment: This is where the user's text is captured (`input`) and passed to sendMessage().
-                  Implement backend endpoint at POST /api/chat that accepts { messages, docContext } and streams response back. */}
-              <div className="flex items-center gap-2">
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    // Submit on Enter (without Shift); allow Shift+Enter for newline
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendMessage();
-                    }
-                  }}
-                  autoFocus
-                  tabIndex={0}
-                  aria-label="Chat input"
-                  placeholder="Ask about the docs..."
-                  className="flex-1 min-h-[44px] max-h-28 resize-none bg-transparent outline-none text-sm text-muted-foreground p-2 rounded"
-                />
-                <button onClick={sendMessage} className="px-4 py-2 bg-primary text-white rounded hover:opacity-95">
-                  Send
-                </button>
+                <div className="px-3 py-2 border-t border-muted/10">
+                  <div className="flex items-center gap-2">
+                    <textarea
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          sendMessage();
+                        }
+                      }}
+                      autoFocus
+                      tabIndex={0}
+                      aria-label="Chat input"
+                      placeholder="Ask about the docs..."
+                      className="flex-1 min-h-[44px] max-h-28 resize-none bg-transparent outline-none text-sm text-muted-foreground p-2 rounded"
+                    />
+                    <button onClick={sendMessage} className="px-4 py-2 bg-primary text-white rounded hover:opacity-95">
+                      Send
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-1 flex-col justify-between p-5">
+                <div className="space-y-4">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-amber-600">
+                    <Lock className="h-3.5 w-3.5" />
+                    Paid only
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold">Unlock DOT in the paid version</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Free users see the assistant preview here. Paid users get the real chatbot tied to your docs experience.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    {[
+                      "Ask questions about language syntax and IDE behavior.",
+                      "Get answers grounded in the project documentation.",
+                      "Use the same premium account as paid LSP tooling in the IDE.",
+                    ].map((item) => (
+                      <div key={item} className="flex items-start gap-3 rounded-xl border border-border/50 bg-background/40 p-3">
+                        <BadgeCheck className="mt-0.5 h-4 w-4 text-primary" />
+                        <p className="text-sm text-muted-foreground">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Button asChild className="w-full glow-primary">
+                    <Link href="/auth/signup">Upgrade with Razorpay</Link>
+                  </Button>
+                  <p className="text-center text-xs text-muted-foreground">
+                    Frontend gating only. Payment wiring is documented, not implemented.
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}

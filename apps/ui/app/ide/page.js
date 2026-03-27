@@ -1,13 +1,27 @@
 "use client";
+
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Editor } from "@/components/Editor";
 import { Header } from "@/components/Header";
 import { Settings } from "@/components/Settings";
+import { PlanToggle } from "@/components/PlanToggle";
 import { ThreeBackground } from "@/components/ThreeBackground";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { Play, Settings as SettingsIcon, AlertCircle, CheckCircle2, FileCode, Terminal as TerminalIcon } from "lucide-react";
+import {
+  Play,
+  Settings as SettingsIcon,
+  AlertCircle,
+  CheckCircle2,
+  FileCode,
+  Terminal as TerminalIcon,
+  BadgeCheck,
+  Lock,
+  Sparkles,
+} from "lucide-react";
+
 const DEFAULT_CODE = `ye x = 10
 ye y = 20
 ye sum = x + y
@@ -21,10 +35,12 @@ jabtak x < 15 {
   bol x
   x = x + 1
 }`;
+
 export default function IDE() {
   const { theme: appTheme, setTheme: setAppTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [plan, setPlan] = useState("free");
   const [sourceCode, setSourceCode] = useState(DEFAULT_CODE);
   const [compiledCode, setCompiledCode] = useState("");
   const [output, setOutput] = useState("");
@@ -40,16 +56,19 @@ export default function IDE() {
     showCompiled: true,
     showProblems: true,
   });
+
   useEffect(() => {
     setMounted(true);
     if (appTheme) {
-      setSettings(prev => ({ ...prev, theme: appTheme }));
+      setSettings((prev) => ({ ...prev, theme: appTheme }));
     }
   }, [appTheme]);
+
   const handleThemeChange = (newTheme) => {
-    setSettings(prev => ({ ...prev, theme: newTheme }));
+    setSettings((prev) => ({ ...prev, theme: newTheme }));
     setAppTheme(newTheme);
   };
+
   const handleCompileAndRun = async () => {
     setIsCompiling(true);
     if (settings.clearOutput) {
@@ -57,15 +76,18 @@ export default function IDE() {
       setCompiledCode("");
       setOutput("");
     }
+
     try {
-      const response = await fetch('/api/execute', {
-        method: 'POST',
+      const response = await fetch("/api/execute", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ code: sourceCode }),
       });
+
       const result = await response.json();
+
       if (result.success) {
         setCompiledCode(result.code || "");
         setOutput(result.output || "");
@@ -73,60 +95,102 @@ export default function IDE() {
       } else {
         setCompiledCode(result.code || "");
         setOutput(result.output || "");
-        setErrors(result.errors || [{
-          message: 'Compilation or execution failed',
-          type: 'error'
-        }]);
+        setErrors(
+          result.errors || [
+            {
+              message: "Compilation or execution failed",
+              type: "error",
+            },
+          ]
+        );
       }
     } catch (error) {
-      setErrors([{
-        message: error instanceof Error ? error.message : 'Failed to execute code',
-        type: 'error'
-      }]);
-      setOutput('');
-      setCompiledCode('');
+      setErrors([
+        {
+          message: error instanceof Error ? error.message : "Failed to execute code",
+          type: "error",
+        },
+      ]);
+      setOutput("");
+      setCompiledCode("");
     } finally {
       setIsCompiling(false);
     }
   };
+
   if (!mounted) {
     return null;
   }
+
   return (
     <div className="h-screen flex flex-col bg-background">
       <ThreeBackground variant="particles" />
       <Header />
-      <div className="h-12 border-b border-border/50 flex items-center justify-between px-4 bg-card/50 backdrop-blur-sm mt-16">
+
+      <div className="mt-16 border-b border-border/50 bg-card/30 px-4 py-2 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              Premium Preview
+            </span>
+            <span className="text-muted-foreground">
+              LSP tools are paid. Compile and run stays free.
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <PlanToggle plan={plan} onChange={setPlan} />
+            {plan === "free" && (
+              <Button asChild size="sm" className="glow-primary">
+                <Link href="/auth/signup">Upgrade</Link>
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="h-12 border-b border-border/50 flex items-center justify-between px-4 bg-card/50 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           <FileCode className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium">main.jpp</span>
         </div>
         <div className="flex items-center gap-2">
-          <Button 
-            onClick={handleCompileAndRun} 
-            disabled={isCompiling}
-            className="glow-primary">
+          <Button onClick={handleCompileAndRun} disabled={isCompiling} className="glow-primary">
             <Play className="h-4 w-4 mr-2" />
             {isCompiling ? "Compiling..." : "Compile & Run"}
           </Button>
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => setSettingsOpen(true)}>
+          <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)}>
             <SettingsIcon className="h-4 w-4" />
           </Button>
         </div>
       </div>
+
       <div className="flex-1 overflow-hidden">
         <PanelGroup direction="horizontal">
           <Panel defaultSize={50} minSize={30}>
             <div className="h-full flex flex-col bg-editor-bg">
               <div className="h-10 border-b border-panel-border px-4 flex items-center text-sm font-medium text-editor-fg">
-                Source Code
+                <div className="flex w-full items-center justify-between gap-3">
+                  <span>Source Code</span>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {plan === "paid" ? (
+                      <>
+                        <BadgeCheck className="h-3.5 w-3.5 text-emerald-500" />
+                        <span>Paid preview: autocomplete, hover, diagnostics, outline</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="h-3.5 w-3.5 text-amber-500" />
+                        <span>LSP is locked in free plan</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
+
               <div className="flex-1">
-                <Editor 
-                  value={sourceCode} 
+                <Editor
+                  value={sourceCode}
                   onChange={setSourceCode}
                   theme={settings.theme}
                   fontSize={settings.fontSize}
@@ -136,34 +200,40 @@ export default function IDE() {
               </div>
             </div>
           </Panel>
+
           <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
+
           <Panel defaultSize={50} minSize={30}>
             <PanelGroup direction="vertical">
               {settings.showCompiled && (
-                <Panel defaultSize={settings.showProblems ? 33 : 50} minSize={20}>
-                  <div className="h-full flex flex-col bg-panel-bg">
-                    <div className="h-10 border-b border-panel-border px-4 flex items-center text-sm font-medium text-editor-fg">
-                      Compiled JavaScript
+                <>
+                  <Panel defaultSize={settings.showProblems ? 33 : 50} minSize={20}>
+                    <div className="h-full flex flex-col bg-panel-bg">
+                      <div className="h-10 border-b border-panel-border px-4 flex items-center text-sm font-medium text-editor-fg">
+                        Compiled JavaScript
+                      </div>
+                      <div className="flex-1">
+                        <Editor
+                          value={compiledCode || "// Compiled code will appear here"}
+                          onChange={() => {}}
+                          readOnly
+                          language="javascript"
+                          theme={settings.theme}
+                          fontSize={settings.fontSize}
+                          wordWrap={settings.wordWrap ? "on" : "off"}
+                          minimap={false}
+                        />
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <Editor 
-                        value={compiledCode || "// Compiled code will appear here"} 
-                        onChange={() => {}} 
-                        readOnly 
-                        language="javascript"
-                        theme={settings.theme}
-                        fontSize={settings.fontSize}
-                        wordWrap={settings.wordWrap ? "on" : "off"}
-                        minimap={false}
-                      />
-                    </div>
-                  </div>
-                </Panel>
+                  </Panel>
+                  <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors" />
+                </>
               )}
-              {settings.showCompiled && settings.showProblems && (
-                <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors" />
-              )}
-              <Panel defaultSize={settings.showCompiled && settings.showProblems ? 33 : settings.showCompiled || settings.showProblems ? 50 : 100} minSize={15}>
+
+              <Panel
+                defaultSize={settings.showCompiled && settings.showProblems ? 33 : settings.showCompiled || settings.showProblems ? 50 : 100}
+                minSize={15}
+              >
                 <div className="h-full flex flex-col bg-terminal-bg">
                   <div className="h-10 border-b border-panel-border px-4 flex items-center gap-2 text-sm font-medium">
                     <TerminalIcon className="h-4 w-4 text-terminal-fg" />
@@ -176,6 +246,7 @@ export default function IDE() {
                   </div>
                 </div>
               </Panel>
+
               {settings.showProblems && (
                 <>
                   <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors" />
@@ -197,7 +268,9 @@ export default function IDE() {
                       <div className="flex-1 overflow-auto">
                         {errors.length === 0 ? (
                           <div className="p-4 text-sm text-muted-foreground">
-                            No problems detected
+                            {plan === "paid"
+                              ? "No problems detected. Paid preview keeps this panel for live LSP diagnostics plus compile errors."
+                              : "No problems detected. Free plan shows compile errors here after execution."}
                           </div>
                         ) : (
                           <div className="divide-y divide-border/50">
@@ -206,14 +279,8 @@ export default function IDE() {
                                 <div className="flex items-start gap-3">
                                   <AlertCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
                                   <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium text-destructive">
-                                      {error.message}
-                                    </div>
-                                    {error.line && (
-                                      <div className="text-xs text-muted-foreground mt-1">
-                                        Line {error.line}
-                                      </div>
-                                    )}
+                                    <div className="text-sm font-medium text-destructive">{error.message}</div>
+                                    {error.line && <div className="text-xs text-muted-foreground mt-1">Line {error.line}</div>}
                                   </div>
                                 </div>
                               </div>
@@ -229,6 +296,34 @@ export default function IDE() {
           </Panel>
         </PanelGroup>
       </div>
+
+      {plan === "free" && (
+        <div className="pointer-events-none fixed bottom-5 right-5 z-40">
+          <div className="pointer-events-auto w-[320px] rounded-2xl border border-border/70 bg-card/95 p-4 shadow-2xl backdrop-blur-md">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  <Lock className="h-3.5 w-3.5 text-amber-500" />
+                  Paid Feature
+                </div>
+                <h3 className="mt-2 text-base font-semibold">Unlock LSP in J++ IDE</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Get autocomplete, hover, diagnostics, and outline without shrinking the free editor layout.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-2">
+              <Button asChild size="sm" className="glow-primary">
+                <Link href="/auth/signup">Upgrade</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/docs">DOT Preview</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Settings
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
