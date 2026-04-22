@@ -1,8 +1,8 @@
-// File: C:\Users\VRAJ SHAH\Desktop\jide\apps\ui\app\auth\signup\page.js
-import * as entry from '../../../../../app/auth/signup/page.js'
+// File: C:\Users\VRAJ SHAH\Desktop\jide\apps\ui\app\contribute\page.js
+import * as entry from '../../../../app/contribute/page.js'
 import type { ResolvingMetadata } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
-type TEntry = typeof import('../../../../../app/auth/signup/page.js')
+type TEntry = typeof import('../../../../app/contribute/page.js')
 
 // Check that the entry is a valid entry
 checkFields<Diff<{
