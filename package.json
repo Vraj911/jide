@@ -11,17 +11,13 @@
     "node": ">=18"
   },
   "workspaces": [
-    "apps/*",
-    "libs/*"
+    "apps/*"
   ],
   "scripts": {
-    "nx": "nx",
-    "start:ui": "nx run ui:serve",
-    "build:ui": "nx run ui:build",
+    "start:ui": "npm --prefix apps/ui run dev",
+    "build:ui": "npm --prefix apps/ui run build",
     "start:cli": "node ./apps/cli/src/cli.js",
-    "start:backend": "nx run backend:serve",
-    "build:backend": "nx run backend:build",
-    "test": "node ./apps/cli/src/cli.js --help"
+    "test": "node --test --test-concurrency=1 tests/auth-store.test.js tests/auth-api.test.js tests/execute-api.test.js tests/auth-integration.test.js tests/performance.test.js"
   },
   "author": "Vraj Shah shahvraj140@gmail.com",
   "license": "MIT",
@@ -50,7 +46,6 @@
     "yargs": "^17.7.2"
   },
   "devDependencies": {
-    "@nrwl/workspace": "^15.0.0",
-    "nx": "^15.0.0"
+    "@playwright/test": "^1.55.0"
   }
 }

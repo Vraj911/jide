@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.next
+.turbo
 *.local
 
 # Editor directories and files
@@ -23,6 +25,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# Local contributions saved from in-app submissions
-contributions/
+# Local auth/session data
+data/
 

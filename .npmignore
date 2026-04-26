@@ -1,6 +1,5 @@
 # Docs not needed in npm package
-DOCKER_README.md
-lib/jpp/PROJECT_README.md
+DOCKER.md
 
 # Any other non-runtime artifacts
 **/*.md

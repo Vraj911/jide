@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,42 @@ import Image from "next/image";
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [csrfToken, setCsrfToken] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
-  const handleSubmit = (e) => {
+
+  useEffect(() => {
+    fetch("/api/auth/csrf")
+      .then((res) => res.json())
+      .then((data) => setCsrfToken(data.csrfToken || ""))
+      .catch(() => setCsrfToken(""));
+  }, []);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // For now, just navigate to IDE
-    router.push("/ide");
+    setError("");
+    setIsSubmitting(true);
+    try {
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(result.error || "Signup failed.");
+        return;
+      }
+      router.push("/ide");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Signup failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   return (
     <div className="min-h-screen grid lg:grid-cols-2 relative">
@@ -72,9 +103,10 @@ export default function SignupPage() {
                   className="bg-background"
                 />
               </div>
-              <Button type="submit" className="w-full glow-primary">
-                Create Account
+              <Button type="submit" className="w-full glow-primary" disabled={isSubmitting}>
+                {isSubmitting ? "Creating..." : "Create Account"}
               </Button>
+              {error && <p className="text-sm text-destructive">{error}</p>}
             </form>
             <div className="relative">
               <div className="absolute inset-0 flex items-center">

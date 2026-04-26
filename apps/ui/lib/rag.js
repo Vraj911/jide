@@ -1,9 +1,11 @@
-import fs from "fs/promises";
-import path from "path";
+const fs = require("fs/promises");
+const path = require("path");
 
 /* ===================== CONFIG ===================== */
 
 const CACHE_KEY = "__jide_rag_index__";
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const BUILD_ID_KEY = "__jide_rag_build_id__";
 
 // Chunking
 const MAX_CHARS_PER_CHUNK = 900;
@@ -43,7 +45,7 @@ async function findRepoRoot(startDir) {
   for (let i = 0; i < 6; i++) {
     if (
       (await pathExists(path.join(current, ".git"))) ||
-      (await pathExists(path.join(current, "jpp.md")))
+      (await pathExists(path.join(current, "JPP_README.md")))
     ) {
       return current;
     }
@@ -57,18 +59,18 @@ async function findRepoRoot(startDir) {
 /* ===================== SOURCE SELECTION ===================== */
 /**
  * IMPORTANT:
- * We intentionally index ONLY jpp.md.
- * No PROJECT_README.md, no other markdown files.
+ * We intentionally index J++ language documentation.
  */
 async function collectMarkdownFiles(rootDir) {
-  const jppPath = path.join(rootDir, "jpp.md");
-
-  if (!(await pathExists(jppPath))) {
-    console.warn("⚠️ jpp.md not found at repo root");
-    return [];
+  const candidates = [
+    path.join(rootDir, "JPP_README.md"),
+    path.join(rootDir, "jpp.md"),
+  ];
+  const files = [];
+  for (const file of candidates) {
+    if (await pathExists(file)) files.push(file);
   }
-
-  return [jppPath];
+  return files;
 }
 
 /* ===================== MARKDOWN PROCESSING ===================== */
@@ -184,9 +186,14 @@ async function buildIndex() {
 }
 
 async function getIndex() {
-  if (globalThis[CACHE_KEY]) return globalThis[CACHE_KEY];
+  const now = Date.now();
+  const buildId = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_BUILD_ID || "local-dev";
+  const cached = globalThis[CACHE_KEY];
+  const cachedBuildId = globalThis[BUILD_ID_KEY];
+  if (cached && cachedBuildId === buildId && now - cached.builtAt < CACHE_TTL_MS) return cached.index;
   const index = await buildIndex();
-  globalThis[CACHE_KEY] = index;
+  globalThis[CACHE_KEY] = { index, builtAt: now };
+  globalThis[BUILD_ID_KEY] = buildId;
   return index;
 }
 
@@ -232,6 +239,26 @@ function buildContext(chunks) {
 }
 
 /* ===================== LLM ANSWER ===================== */
+
+async function fetchWithRetry(url, options, retries = 3) {
+  let attempt = 0;
+  let lastError = null;
+  while (attempt < retries) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok) return response;
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    attempt += 1;
+    if (attempt < retries) {
+      const waitMs = 200 * (2 ** attempt);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+  throw lastError || new Error("Failed to call LLM endpoint");
+}
 
 async function buildLLMAnswer(query, chunks) {
   const context = buildContext(chunks);
@@ -279,18 +306,19 @@ Rules:
 
   console.log("🚀 Calling LLM for query:", query);
 
-  const res = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "http://localhost:3000",
-      "X-Title": "DOT Docs Chat",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
+  let res;
+  try {
+    res = await fetchWithRetry(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": "http://localhost:3000",
+        "X-Title": "DOT Docs Chat",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
     return {
       answer: "I cannot find the answer in the provided documentation.",
       sources: [],
@@ -312,7 +340,7 @@ Rules:
 
 /* ===================== PUBLIC API ===================== */
 
-export async function getRagAnswer(query) {
+async function getRagAnswer(query) {
   const index = await getIndex();
   const scored = searchChunks(index, query);
 
@@ -326,3 +354,5 @@ export async function getRagAnswer(query) {
   const chunks = scored.map(s => s.chunk);
   return buildLLMAnswer(query, chunks);
 }
+
+module.exports = { getRagAnswer };
