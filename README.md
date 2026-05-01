@@ -8,6 +8,22 @@ This repository includes:
 - J++ compiler and CLI (`lib/jpp`, `apps/cli`)
 - focused tests for auth, execution, integration, and performance checks
 
+## Quick Start Commands
+Run from the repository root:
+
+1. Install dependencies:
+  ```bash
+  npm install
+  ```
+2. Run the IDE (Next.js web app):
+  ```bash
+  npm run start:ui
+  ```
+3. Run the CLI package:
+  ```bash
+  npm run start:cli
+  ```
+
 ## Tech Stack
 - **Frontend:** Next.js, React, Tailwind, Radix components
 - **Backend:** Next.js route handlers (`apps/ui/app/api/*`)
@@ -72,8 +88,13 @@ This repository includes:
 
 Optional environment variables for docs chat:
 - `OPENAI_API_KEY`
+- `OPENROUTER_API_KEY` (supported alias)
 - `OPENAI_BASE_URL`
 - `OPENAI_MODEL`
+
+Recommended for OpenRouter:
+- `OPENAI_BASE_URL=https://openrouter.ai/api/v1`
+- `OPENAI_MODEL=openai/gpt-4o-mini`
 
 ## API Overview
 - `GET /api/auth/csrf`
@@ -99,3 +120,23 @@ Includes:
 For browser automation strategy and setup, see `PLAYWRIGHT.md`.  
 For J++ language internals, see `JPP_README.md`.  
 For Docker usage, see `DOCKER.md`.
+
+## Interview Demo Deployment
+For interview demonstration, keep the setup simple and reproducible:
+
+1. **Deploy web app on Vercel**
+   - import this repo into Vercel
+   - set root to repository root (monorepo)
+   - build command: `npm run build:ui`
+   - output is handled by Next.js app in `apps/ui`
+2. **Add environment variables in Vercel**
+   - `OPENROUTER_API_KEY` (or `OPENAI_API_KEY`)
+   - `OPENAI_BASE_URL`
+   - `OPENAI_MODEL`
+3. **Demo script flow (5-7 mins)**
+   - open `/docs` and ask docs chat a language question
+   - open `/ide` and run a successful snippet
+   - run a failing type-check example to show compile-time safety
+   - show generated JS panel and runtime output panel
+
+If you want full ownership in interview, optionally deploy the same repo on Render/Railway as a Node service after running `npm install && npm run build:ui && npm --prefix apps/ui run start`.

@@ -1,0 +1,885 @@
+================================================================
+J++ PROJECT — COMPLETE INTERVIEW PREPARATION GUIDE
+================================================================
+Covers: Compiler Design, Auth & Security, RAG/AI, Architecture,
+        Testing, JavaScript Fundamentals, and Design-Level Questions
+================================================================
+
+
+================================================================
+SECTION 1: COMPILER PIPELINE
+================================================================
+
+----------------------------------------------------------------
+Q1. Walk me through your compiler pipeline from source code to output.
+----------------------------------------------------------------
+
+STRONG ANSWER:
+Source code enters compiler.js which orchestrates four stages.
+First, the lexer reads the raw text character by character and
+emits a flat list of tokens — things like keywords, numbers,
+strings, and operators. Then the parser takes those tokens and
+builds an Abstract Syntax Tree (AST), a tree structure that
+represents the grammatical meaning of the program. Then the
+type checker walks that AST and validates every expression — for
+example it rejects "number + string" or "string . number". Finally
+the generator takes the validated AST and emits plain JavaScript.
+That JS is then executed in a constrained worker thread on the server.
+
+FOLLOW-UP Q: What does a token look like? Give me an example for "ye a = 5".
+ANSWER:
+For "ye a = 5", the lexer emits roughly four tokens:
+  { type: "KEYWORD", value: "ye" }
+  { type: "IDENTIFIER", value: "a" }
+  { type: "OPERATOR", value: "=" }
+  { type: "NUMBER", value: 5 }
+Each token is a small object with a type and a value. The lexer
+discards whitespace — it only emits meaningful units.
+
+FOLLOW-UP Q: What does the AST look like for "ye a = 5"?
+ANSWER:
+The AST would be a VariableDeclaration node at the root with two
+children: an Identifier node with name "a", and a NumericLiteral
+node with value 5. For a more complex case like "ye total = a + b",
+you'd have a VariableDeclaration whose value child is a
+BinaryExpression — that node has operator "+", left Identifier "a",
+and right Identifier "b". The type checker then walks this and
+confirms both "a" and "b" are numbers before allowing the + operator.
+
+FOLLOW-UP Q: How does the type checker handle "a + b" where a is number and b is string?
+ANSWER:
+The type checker walks to the BinaryExpression node for "+". It
+recursively infers the type of the left operand (number) and the
+right operand (string). It then checks: is this operator valid for
+these two types? Since "+" is defined as numeric-only in J++, it
+produces a structured compile error — something like "Type mismatch:
+'+' requires two numbers, got number and string." The compilation
+stops and the error is returned to the user without any JS being
+generated.
+
+FOLLOW-UP Q: Why emit JavaScript instead of bytecode or direct execution?
+ANSWER:
+If I compiled to bytecode or a custom runtime, I'd have to rebuild
+the entire ecosystem — standard library, package manager, debugger,
+runtime environment. Targeting JS as the backend lets me focus on
+the language design problem I actually wanted to solve. I get the
+entire Node/browser ecosystem for free. This is the same philosophy
+as TypeScript — it doesn't replace JS, it adds a safety layer on
+top and compiles away.
+
+----------------------------------------------------------------
+Q2. How does your lexer handle a string literal like "hello"?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+The lexer reads character by character. When it encounters a
+double-quote, it knows a string literal is starting. It keeps
+consuming characters until it finds the closing double-quote,
+collecting everything in between as the string value, then emits a
+STRING token. Numbers work similarly — when it sees a digit, it
+keeps consuming until the next character is not a digit, then emits
+a NUMBER token with the parsed numeric value.
+
+FOLLOW-UP Q: What happens if a string is never closed?
+ANSWER:
+The lexer reaches end-of-file while still in "string mode" and
+emits a lexer error — something like "Unterminated string literal
+at line X". The error is structured so the compiler can return it
+to the user with a useful message rather than silently producing
+malformed output.
+
+FOLLOW-UP Q: What token type do you emit for "ye" — keyword or identifier?
+ANSWER:
+"ye" is a keyword. After the lexer reads a sequence of letters, it
+checks if the result is in a reserved keyword set. If yes, it emits
+type KEYWORD. If no, it emits type IDENTIFIER. This distinction
+matters for the parser — keywords drive grammar rules, identifiers
+become variable names.
+
+----------------------------------------------------------------
+Q3. Why does J++ use "." for concatenation instead of "+"?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+JavaScript's core problem is that "+" is overloaded — it does
+addition for numbers and concatenation for strings, and when you
+mix types the behavior is implicit and surprising: 1 + "1" gives
+"11" instead of an error. By giving concatenation its own dedicated
+operator ".", J++ makes both operations semantically unambiguous.
+The type checker simply rejects any "+" expression where either
+operand is not a number, and rejects any "." expression where
+either operand is not a string. There is no mixed-type guessing
+at all. This is similar to how PHP uses "." for concatenation.
+
+FOLLOW-UP Q: What would happen if someone tried "ye x = 5 . 'hello'"?
+ANSWER:
+The type checker would catch it. It evaluates the "." operator,
+sees left operand is number and right operand is string, and
+produces a compile error: "Type mismatch: '.' requires two strings,
+got number and string." The program never executes.
+
+FOLLOW-UP Q: How do you handle operator precedence between "+" and "."?
+ANSWER:
+They are separate operators with their own precedence rules in the
+parser. The parser assigns a higher binding power to arithmetic
+operators than to concatenation, similar to how most languages
+handle it. The AST reflects this — nested BinaryExpression nodes
+encode the precedence structurally.
+
+----------------------------------------------------------------
+Q4. How does your worker thread execution work? Why not run JS in the main process?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+Running user-submitted code in the main process is dangerous — an
+infinite loop or memory hog would crash the entire server. Worker
+threads give isolation: the generated JS runs in a separate thread
+with a timeout and memory constraints. If code hangs or exceeds
+limits, we terminate the worker without affecting the main process.
+It is not full container-level sandboxing, but for a single-user
+learning tool it is a reasonable trade-off — and I documented that
+limitation explicitly.
+
+FOLLOW-UP Q: How would you harden this for a multi-tenant production environment?
+ANSWER:
+For true multi-tenant isolation you would need containerization —
+running each execution in a Docker container or a VM with strict
+resource limits, network isolation, and a read-only filesystem.
+Alternatively, services like AWS Lambda or Google Cloud Run give
+you process-level isolation per invocation. Worker threads share
+the same process memory space, so a sufficiently crafty exploit
+could potentially escape. My docs acknowledge this gap explicitly.
+
+FOLLOW-UP Q: Could a malicious user still do damage within the worker thread?
+ANSWER:
+Yes, within the constraints. If they import Node built-ins like
+"fs" or "child_process" in the generated JS, they could access
+the filesystem or spawn processes. A production hardening step
+would be to strip or disallow those imports before execution, or
+use a sandboxed JS runtime like vm2 or a WASM-based execution
+environment that does not have access to Node APIs at all.
+
+
+================================================================
+SECTION 2: AUTH AND SECURITY
+================================================================
+
+----------------------------------------------------------------
+Q5. How does your authentication work end to end?
+----------------------------------------------------------------
+
+IMPORTANT: Do NOT mention MongoDB — it is not in the project.
+Auth is file-based with cookie-based sessions.
+
+STRONG ANSWER:
+First the client fetches a CSRF token from GET /api/auth/csrf.
+On signup or login, the client sends credentials plus that CSRF
+token as a request header. The server validates the CSRF token,
+applies rate limiting, then hashes and stores the password (for
+signup) or verifies it (for login). On success it sets a
+jide_session cookie. Subsequent requests include that cookie;
+the server validates it against the session store, also checking
+an IP and user-agent fingerprint to detect session hijacking.
+Logout clears the cookie and invalidates the session server-side.
+
+FOLLOW-UP Q: How did you store passwords — plain text, hashed, salted?
+ANSWER:
+Hashed. Storing plain text passwords is a critical security flaw
+— if the data store is compromised, all passwords are exposed
+immediately. The standard approach is bcrypt or argon2, both of
+which hash the password with a per-user salt baked in. Even if the
+hashed values leak, an attacker cannot reverse them efficiently.
+My implementation follows this pattern using the authStore module.
+
+FOLLOW-UP Q: Why cookie-based sessions instead of JWT?
+ANSWER:
+Cookies with HttpOnly and Secure flags are not accessible to
+JavaScript — they cannot be stolen by XSS. JWTs stored in
+localStorage are vulnerable to XSS because any script on the
+page can read them. Cookie-based sessions also allow instant
+revocation — I can delete the session server-side and the user
+is logged out immediately. With JWTs, a token is valid until
+expiry even if the user logs out, unless you maintain a token
+denylist which defeats much of JWT's stateless advantage.
+
+----------------------------------------------------------------
+Q6. What is a CSRF attack and how did you prevent it?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+CSRF stands for Cross-Site Request Forgery. The attack works like
+this: you are logged into your IDE, your browser holds a valid
+session cookie, and a malicious third-party website tricks your
+browser into making a request to my server — for example by
+embedding a hidden form that auto-submits. Since your browser
+automatically includes cookies, the server thinks the request is
+legitimate. The defence is a CSRF token: a random unpredictable
+value the server gives to the legitimate frontend only. Every
+sensitive POST must include this token in a header. A malicious
+third-party site cannot read it due to the browser's same-origin
+policy, so it cannot forge a valid request. My project issues this
+token via GET /api/auth/csrf before every auth form submission.
+
+FOLLOW-UP Q: Why doesn't CSRF affect GET requests?
+ANSWER:
+By convention, GET requests should be read-only and have no
+side effects. CSRF attacks exploit the browser's automatic
+cookie inclusion on cross-origin requests — but they can only
+trigger requests, not read the responses. A GET that returns data
+does not help the attacker because they cannot see the response.
+The risk comes from state-changing operations, which should always
+be POST, PUT, or DELETE.
+
+FOLLOW-UP Q: Is CSRF still a concern if you use JWT in headers instead of cookies?
+ANSWER:
+No. CSRF works by exploiting the browser's automatic cookie
+inclusion. If your auth token lives in a custom Authorization
+header and is set by JavaScript, a cross-site form or image tag
+cannot include it — browsers do not automatically add custom
+headers to cross-origin requests. This is one reason some teams
+prefer header-based JWT auth — it eliminates CSRF by design,
+though it introduces the XSS risk mentioned earlier.
+
+FOLLOW-UP Q: What is the SameSite cookie attribute?
+ANSWER:
+SameSite is a cookie attribute that controls when the browser
+sends the cookie on cross-origin requests. SameSite=Strict means
+the cookie is never sent on cross-origin requests at all.
+SameSite=Lax means it is sent on top-level navigations but not
+on sub-resource requests like form POSTs from other origins.
+SameSite=Lax is now the browser default and provides meaningful
+CSRF protection for most cases, but an explicit CSRF token is
+still considered best practice for sensitive operations.
+
+----------------------------------------------------------------
+Q7. What is rate limiting and why did you add it?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+Rate limiting restricts how many requests a single IP can make
+to an endpoint within a time window. I added it to the auth,
+execute, and chat endpoints. For auth, it prevents brute-force
+attacks — without it, an attacker could try millions of password
+combinations automatically. For execute and chat, it prevents
+abuse of the compiler and the OpenAI API calls. My implementation
+is in-memory per-IP, which works for a single-server setup but
+would need Redis or a shared store for multi-instance deployments.
+
+FOLLOW-UP Q: What HTTP status code do you return when rate limit is hit?
+ANSWER:
+429 Too Many Requests. This is the standard status code defined
+in RFC 6585 for rate limiting. A well-behaved client seeing 429
+should back off and retry after a delay, optionally guided by a
+Retry-After response header.
+
+FOLLOW-UP Q: How would you scale rate limiting to multiple server instances?
+ANSWER:
+In-memory rate limiting breaks in a multi-instance setup because
+each instance has its own independent counter. If you have three
+servers, a user could make three times the limit by hitting each
+one. The standard solution is a shared store — Redis is the
+typical choice because it supports atomic increment operations
+with TTL. You store the count keyed by IP in Redis, and all
+server instances share that state.
+
+FOLLOW-UP Q: What is session fingerprinting?
+ANSWER:
+Session fingerprinting means recording extra identifying
+information about the session at login time — specifically the
+IP address and a hash of the user-agent string. On every
+subsequent request, the server checks if these match. If someone
+steals the session cookie and uses it from a different IP or
+browser, the fingerprint check fails and the session is
+invalidated. It is not foolproof — an attacker on the same
+network or using the same browser profile would pass — but it
+adds a meaningful layer of defence against simple cookie theft.
+
+
+================================================================
+SECTION 3: RAG AND AI
+================================================================
+
+----------------------------------------------------------------
+Q8. What is RAG and why did you use it for the docs chat?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+RAG stands for Retrieval-Augmented Generation. The problem with
+using a raw LLM for docs chat is that the model has no knowledge
+of your specific project — it would hallucinate answers. RAG
+solves this by first retrieving relevant chunks from your own
+documentation, then passing those chunks as context to the LLM
+alongside the user's question. The LLM then grounds its answer
+in your actual docs instead of guessing. In my project, the docs
+are J++ language documentation in jpp.md, chunked and indexed
+with TF-IDF scoring. When a user asks "what is the dot operator?",
+the system retrieves the most relevant chunks and the LLM
+summarises them accurately.
+
+FOLLOW-UP Q: What happens if the user asks something not in the docs?
+ANSWER:
+Two safety nets exist. First, the TF-IDF retrieval will return
+low-scoring or zero-scoring results — if no chunk scores above
+the MIN_SCORE threshold, the system immediately returns "I cannot
+find the answer in the provided documentation" without even
+calling the LLM. Second, the LLM system prompt instructs it to
+only answer from the provided context and to say it cannot find
+the answer if the information is not present — it is explicitly
+told not to use prior knowledge or guess.
+
+----------------------------------------------------------------
+Q9. What is TF-IDF and how does your retrieval actually score chunks?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+TF-IDF stands for Term Frequency–Inverse Document Frequency.
+TF measures how often a query word appears in a chunk — more
+occurrences means more relevant. IDF penalises words that appear
+in almost every chunk, since common words like "the" or "is"
+do not help distinguish chunks from each other. Multiplying TF
+by IDF gives each word a weight, and summing those weights across
+all query words gives each chunk a total relevance score. The
+top-K highest-scoring chunks are retrieved and passed as context
+to the LLM. It is lightweight — no external vector database needed
+— which made it a good fit for a single documentation file.
+
+FOLLOW-UP Q: What are the limitations of TF-IDF vs semantic embeddings?
+ANSWER:
+TF-IDF only matches exact tokens — it has no semantic understanding.
+If a user asks "how do I print output?" but the docs use the word
+"bol", TF-IDF finds nothing because the words do not overlap.
+Semantic embeddings convert text into vectors in a high-dimensional
+space where similar meanings cluster together — "print" and "bol"
+could be close in that space if the model learned the language.
+For a small single-file corpus with predictable vocabulary,
+TF-IDF is a practical choice. For a large, varied corpus where
+users phrase questions differently from the docs, embeddings
+are clearly better.
+
+FOLLOW-UP Q: Why did you choose TF-IDF over vector embeddings?
+ANSWER:
+Three reasons. First, simplicity — TF-IDF runs entirely in memory
+with no external dependencies, no API calls for embedding, and
+no vector database to manage. Second, the corpus is tiny — a
+single jpp.md file — so the vocabulary overlap between user
+questions and docs is high enough for TF-IDF to work well.
+Third, it degrades gracefully without an API key, which was
+important for making the tool usable even in minimal deployments.
+If the corpus grew or user queries became more varied, I would
+migrate to an embedding-based approach.
+
+FOLLOW-UP Q: What is chunking and why does chunk size matter?
+ANSWER:
+Chunking splits the documentation into smaller pieces before
+indexing. If you index the entire document as one unit, retrieval
+is too coarse — you pass everything to the LLM regardless of
+relevance. Too-small chunks lose context — a chunk might contain
+an answer but without the surrounding explanation it is
+meaningless. My code uses 900-character chunks with 150-character
+overlap. The overlap ensures that a relevant sentence that falls
+on a chunk boundary is still captured in at least one chunk.
+
+FOLLOW-UP Q: How would you add support for a different LLM provider like Anthropic or Gemini?
+ANSWER:
+The LLM call is isolated in the buildLLMAnswer function. It reads
+OPENAI_BASE_URL from environment variables, which means you can
+already point it at any OpenAI-compatible endpoint. For a
+non-compatible API like Anthropic's, I would abstract the call
+behind an interface — a function that takes (query, context) and
+returns (answer, sources) — then implement provider-specific
+adapters behind that interface. Swapping provider becomes a
+config change, not a code change.
+
+----------------------------------------------------------------
+Q10. What happens in your system if the OpenAI API key is not set?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+The system degrades gracefully — it still works, just without LLM
+generation. Instead of sending retrieved chunks to OpenAI for a
+summarised answer, it returns a fallback message. But importantly,
+if there is no API key AND no context chunks, it fails fast with
+a clear message. This was a deliberate design choice: the RAG
+pipeline's retrieval stage is fully functional without an API key,
+and the fallback behaviour means the system never throws an
+unhandled error at the user. It is a good example of building
+with graceful degradation in mind.
+
+FOLLOW-UP Q: How do you handle API failures or timeouts when calling OpenAI?
+ANSWER:
+The fetchWithRetry function wraps the API call with exponential
+backoff — it retries up to 3 times with wait times of 400ms,
+800ms, and 1600ms between attempts. If all retries fail, it
+catches the error and returns the fallback "I cannot find the
+answer" response rather than letting an exception bubble up to
+the user. This prevents a flaky upstream API from crashing the
+chat entirely.
+
+
+================================================================
+SECTION 4: ARCHITECTURE
+================================================================
+
+----------------------------------------------------------------
+Q11. Why did you use a monorepo with Nx? What are the benefits?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+The project has three distinct pieces — the language compiler in
+lib/jpp, the web UI in apps/ui, and the CLI in apps/cli. A
+monorepo keeps them in one repository so changes to the compiler
+are immediately visible to both the UI and CLI without publishing
+or version syncing packages. Nx adds build orchestration — it
+knows the dependency graph between packages and only rebuilds
+what changed. For a project where the compiler is a shared
+library consumed by multiple apps, a monorepo is much cleaner
+than three separate repos with cross-repo dependency management.
+
+FOLLOW-UP Q: What is the difference between Nx and plain npm workspaces?
+ANSWER:
+npm workspaces handle the basic concern of linking local packages
+to each other in node_modules. Nx builds on top of that with a
+dependency graph, incremental builds, caching, and task
+orchestration — so "build everything affected by a change to
+the compiler" is a single Nx command. Nx also provides project
+generators and standardised tooling configuration across all
+packages. For a small project, plain workspaces might be enough;
+Nx pays off as complexity grows.
+
+FOLLOW-UP Q: Why Next.js for the UI? What does the App Router give you?
+ANSWER:
+Next.js lets me have both the frontend and backend API routes in
+one project without a separate Express server. The App Router
+specifically allows route handlers that run on Node, which is
+important because I need filesystem access to read documentation
+and need to spawn worker threads for code execution. The
+"runtime = nodejs" directive in the route files enables this —
+by default Next.js routes run on the Edge runtime which does
+not have those APIs. The App Router also gives file-based routing
+and React Server Components, keeping the project lean.
+
+FOLLOW-UP Q: What is "dynamic = force-dynamic" and when would you not use it?
+ANSWER:
+By default Next.js aggressively caches route handler responses.
+"force-dynamic" opts out of that — it tells Next.js to re-run
+the handler on every request rather than serving a cached
+response. For the chat and execute endpoints this is essential
+because every request has different input and must produce a
+fresh response. You would NOT use it for routes that serve
+genuinely static data — like a list of supported J++ keywords —
+where caching is desirable for performance.
+
+FOLLOW-UP Q: How would you deploy this to production — Vercel, Docker, or something else?
+ANSWER:
+The project already has a Dockerfile and docker-compose setup.
+For production I would use Docker because the worker thread
+execution requires Node APIs that are not available in Vercel's
+serverless environment by default, and the filesystem access for
+reading docs files needs a persistent container. Vercel would
+work for a pure UI deployment but would need a separate backend
+service for execution. A container on something like Railway,
+Render, or a VPS gives full control over the Node environment.
+
+
+================================================================
+SECTION 5: TESTING
+================================================================
+
+----------------------------------------------------------------
+Q12. What is your testing strategy for this project?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+I have three layers. First, language-level regression tests in
+lib/jpp/tests.js that test the compiler directly — valid programs
+produce correct JS output, invalid programs produce the right
+structured compile errors. Second, unit and integration tests
+for auth and execution — signup, login, session validation,
+and code execution with timeout handling. Third, a Playwright
+smoke script that launches a real browser, navigates to the IDE,
+types J++ code into the Monaco editor, clicks Compile & Run,
+and asserts the output panel shows the expected result. Full
+spec-style Playwright e2e tests are the next step — the
+architecture and documentation are ready, implementation
+is in progress.
+
+FOLLOW-UP Q: What is the difference between unit, integration, and e2e testing?
+ANSWER:
+Unit tests test a single function or module in isolation —
+for example, testing that the lexer produces the right tokens
+for a given input string, with no database or HTTP involved.
+Integration tests test how multiple modules work together —
+for example, testing that signup → login → session validation
+works as a flow using the actual auth store. End-to-end tests
+test the full system from the user's perspective — a real
+browser navigating to a real URL, interacting with the UI,
+and asserting visible outcomes.
+
+FOLLOW-UP Q: What is the difference between your smoke script and a proper Playwright spec?
+ANSWER:
+My smoke script uses the raw "playwright" package with a manual
+async IIFE — it manages the browser lifecycle manually, catches
+errors with try/catch, and calls process.exit. A proper
+Playwright spec uses "@playwright/test" which provides test(),
+expect(), beforeEach/afterEach hooks, automatic retries,
+parallel execution, and an HTML test report. The spec style
+is more maintainable, composable, and integrates with CI
+pipelines. My script is a valid intermediate step — it validates
+the core workflow — but it lacks the tooling support of a
+proper spec.
+
+FOLLOW-UP Q: How do you test error cases — like invalid J++ code?
+ANSWER:
+In the compiler unit tests, I have cases that deliberately
+submit invalid code — for example, "ye x = 5; x = 'wrong'"
+which is a type reassignment error — and assert that the
+compiler returns a structured error object with the correct
+message and does not produce any JS output. Testing error
+paths is as important as testing happy paths, because users
+will write wrong code constantly and the error messages need
+to be accurate and useful.
+
+
+================================================================
+SECTION 6: JAVASCRIPT AND GENERAL CS
+================================================================
+
+----------------------------------------------------------------
+Q13. What is type coercion in JavaScript? Give examples of when it causes bugs.
+----------------------------------------------------------------
+
+STRONG ANSWER:
+Type coercion is JavaScript's implicit conversion of values
+between types when an operator is applied to mismatched types.
+Classic examples: 1 + "1" gives "11" because JS converts the
+number to a string. [] + {} gives "[object Object]". 0 == false
+is true because == performs coercion. true + true gives 2 because
+booleans coerce to numbers. These are the bugs J++ was designed
+to prevent. The modern JS fix is to always use === for comparisons
+and be explicit about conversions — but J++ enforces this at the
+language level via the type checker, so the mistake is impossible
+to make, not just discouraged.
+
+FOLLOW-UP Q: What is the difference between == and === in JavaScript?
+ANSWER:
+== is the abstract equality operator — it performs type coercion
+before comparing. 1 == "1" is true. === is the strict equality
+operator — it requires both value and type to match. 1 === "1"
+is false. In modern JavaScript, === should almost always be used.
+J++ sidesteps this entirely by making mixed-type operations a
+compile error rather than a runtime behaviour.
+
+FOLLOW-UP Q: How does TypeScript solve the same problem differently from J++?
+ANSWER:
+TypeScript adds a static type system to JavaScript — you can
+annotate variables and function parameters with types, and the
+TypeScript compiler checks them. It catches many coercion bugs
+because it will flag "number + string" as a type error. However
+TypeScript still compiles to JavaScript and preserves JS semantics
+— it warns you away from the problem but does not change the
+operator behaviour itself. J++ takes a more opinionated approach:
+it redefines operators entirely so the type-unsafe behaviour is
+not possible in the language grammar at all.
+
+FOLLOW-UP Q: If you were to add TypeScript to this project, where would you start?
+ANSWER:
+I would start with the compiler lib — lexer.js and parser.js —
+because they have the clearest input/output contracts. The lexer
+takes a string and returns an array of tokens; the parser takes
+tokens and returns an AST. Typing those interfaces first would
+give the best return and catch the most bugs. I would add a
+tsconfig.json with "allowJs: true" and "checkJs: true" to get
+type checking without a full rewrite, then gradually rename
+files to .ts and add proper interfaces for Token, ASTNode,
+and CompileResult.
+
+
+================================================================
+SECTION 7: DESIGN-LEVEL QUESTIONS (SHARP INTERVIEWER QUESTIONS)
+================================================================
+
+----------------------------------------------------------------
+Q14. If J++ is meant to fix JavaScript coercion issues, why does it still 
+     compile down to JavaScript? Isn't that circular?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+J++ does not try to replace JavaScript's runtime — it replaces
+the authoring experience. The coercion bugs happen when a
+developer writes ambiguous code; J++ prevents that at compile
+time before any JS ever runs. Compiling to JS is actually an
+advantage — you get the entire Node and browser ecosystem,
+existing JS libraries, and zero runtime installation on the
+target machine. This is exactly the same philosophy as TypeScript:
+TypeScript does not fix JavaScript, it adds a safety layer on
+top and compiles away. J++ does the same thing, but specifically
+for operator-level type ambiguity. If I had compiled to custom
+bytecode, I would have to rebuild the entire ecosystem —
+standard library, package management, debuggers. Targeting JS
+lets me focus on the language design problem I actually wanted
+to solve.
+
+FOLLOW-UP Q: So what does J++ actually guarantee that TypeScript doesn't?
+ANSWER:
+TypeScript allows you to use "+" with a number and a string in
+ways that TypeScript itself cannot always catch — particularly
+at runtime with any-typed values or when interoperating with
+untyped JS libraries. J++ makes the guarantee at the grammar
+level: there is no way to use "+" with a string in J++ source
+code at all. The type system is simpler but the guarantees are
+stronger for the specific operations it covers. TypeScript's
+type system is much richer overall but the trade-off is
+complexity and escape hatches like "any".
+
+----------------------------------------------------------------
+Q15. You use "." for string concatenation. But if you ever add OOP to J++,
+     "a.run()" would be ambiguous — is it concatenation or a method call?
+     How would you resolve this?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+That is a genuine design conflict and a real limitation of the
+current design. I would have two clean options.
+
+Option A — Retire "." for concatenation and introduce a different
+operator. Good candidates: "++" for string join (since "+" is
+already numeric-only, "++" could mean "join strings"), or a
+named built-in function like concat(a, b) instead of an operator.
+Removing the operator collision keeps the grammar unambiguous.
+
+Option B — Context-aware parsing. If the parser sees an identifier
+followed by "." followed by an identifier followed by "()", it
+treats it as a method call. Otherwise it treats "." as
+concatenation. This is syntactically resolvable but creates
+implicit rules — exactly the kind of ambiguity J++ was designed
+to avoid.
+
+The cleanest solution is Option A. Early design decisions get
+revisited as languages grow — this is a known and accepted
+pattern in language evolution. Keeping the language internally
+consistent matters more than preserving any single operator choice.
+
+FOLLOW-UP Q: What operator would you actually choose to replace "." for concatenation?
+ANSWER:
+I would choose a named function — concat(a, b) — rather than
+a new symbol. Adding more special symbols increases the
+learning curve. A function is explicit, readable, and does not
+collide with any future syntax. For a language aimed at beginners
+and learners, "concat(first, second)" is clearer than any
+cryptic operator. If I wanted to keep an operator, "++" is the
+most logical choice since it visually reads as "plus plus" —
+extra joining — and does not conflict with any likely future
+syntax.
+
+----------------------------------------------------------------
+Q16. Your RAG uses TF-IDF which is keyword matching. What happens if a user 
+     asks "how do I output something?" but your docs only use the word "bol"?
+     Your retrieval would return nothing.
+----------------------------------------------------------------
+
+STRONG ANSWER:
+You are correct — that is a fundamental limitation of lexical
+matching. TF-IDF has no semantic understanding. If the query
+vocabulary does not overlap with the doc vocabulary, retrieval
+fails silently. There are two practical fixes.
+
+Fix 1 — Synonym expansion. Build a small map of common synonyms
+relevant to J++: "print → bol", "output → bol", "display → bol",
+"concatenate → .", and so on. Before running TF-IDF, expand
+the query tokens using this map. This is lightweight and targeted.
+
+Fix 2 — Replace TF-IDF with semantic embeddings. Convert every
+chunk and every query to a vector using a model like
+text-embedding-ada-002. Cosine similarity then finds chunks
+that are semantically close even if the exact words differ.
+This is the production-grade solution.
+
+For the current scope — a single small documentation file with
+predictable vocabulary — I would go with Fix 1 as the quick win.
+Fix 2 would be the right call if the corpus grows.
+
+FOLLOW-UP Q: If you added embeddings, what vector database would you use?
+ANSWER:
+For a small corpus and a single-server deployment, I would use
+pgvector — a PostgreSQL extension that adds vector similarity
+search. It keeps everything in one database without adding a
+new service. If the corpus scaled to millions of documents,
+a dedicated vector database like Pinecone or Weaviate would
+give better performance. For a local development or small
+deployment scenario, ChromaDB is a good lightweight option
+that runs in-process.
+
+----------------------------------------------------------------
+Q17. Your type system only supports "number" and "string". What happens
+     when you try to add booleans, arrays, or null? How would you extend
+     the type checker?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+The current type checker is designed for exactly two primitive types,
+which keeps the implementation simple. To add a new type like boolean,
+I would need to make three changes. First, the lexer needs to
+recognize the new literal — "true" and "false" as keyword tokens.
+Second, the parser needs to create a BooleanLiteral AST node.
+Third, the type checker needs to know what operations are valid on
+booleans — for example, you can use "==" to compare booleans but
+not "+" or ".". For arrays, the type system becomes more complex —
+you need generic types like "array of number" vs "array of string",
+which means the type representation changes from a simple string like
+"number" to a structured object. That is a significant but
+well-understood engineering step — it is how TypeScript's type
+system is structured internally.
+
+FOLLOW-UP Q: What is a type inference algorithm and does J++ use one?
+ANSWER:
+Type inference means the compiler deduces the type of an expression
+without the programmer explicitly annotating it. J++ uses basic
+inference — when you write "ye a = 5", the type checker sees the
+literal 5, infers it is a number, and records that "a" has type
+number without you having to write "ye a: number = 5". This is
+local inference — inferring from the right-hand side of an
+assignment. More advanced algorithms like Hindley-Milner (used
+in Haskell and ML) can infer types across function boundaries
+and through complex expressions. J++ does not need that level
+of sophistication given its current feature set.
+
+----------------------------------------------------------------
+Q18. Your authStore uses serialized mutations and atomic writes. Why?
+     What problem does that solve?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+The problem is concurrent write conflicts. If two requests arrive
+simultaneously — say two signups at the same moment — and both
+read the user store, modify it, and write it back, the second
+write overwrites the first and one signup is lost. This is a
+classic race condition. Serialized mutations solve it by
+queuing all writes and processing them one at a time — no two
+writes ever run concurrently against the store. Atomic writes
+mean the file is written all at once rather than partially —
+if the process crashes mid-write, you get either the old
+complete file or the new complete file, never a corrupted
+half-written state. Together these give you consistency
+guarantees similar to what a database provides, implemented
+at the application level.
+
+FOLLOW-UP Q: This is basically a hand-rolled database. Why not just use SQLite?
+ANSWER:
+That is a fair challenge. SQLite would give you transactions,
+concurrent read safety, and indexes for free. For a toy project,
+a file-based store with serialized mutations is simpler to set
+up — no migration system, no schema, just JSON. But in
+production, SQLite or Postgres would be the right call. The
+file-based approach is a valid learning exercise and documents
+the trade-offs honestly — I explicitly mention that production
+deployments would need a proper database in the project notes.
+
+----------------------------------------------------------------
+Q19. The Playwright smoke test clicks "Compile & Run" and waits for output.
+     But what if Monaco editor does not load in time? How brittle is this test?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+The test handles this with explicit waits — it waits for the
+"Source Code" text to appear (which confirms the page loaded),
+then waits for ".view-lines" or ".monaco-editor" to appear
+(which confirms Monaco initialized). Only after both selectors
+are found does it attempt to interact with the editor. Without
+these waits the test would fail intermittently because Monaco
+is a heavy editor that initializes asynchronously. The 20-second
+timeout on those waits is generous enough to cover slow machines
+and CI environments. The test is reasonably robust for a smoke
+test, though it would benefit from a dedicated Monaco-ready
+indicator — like a data-testid attribute set by the app after
+Monaco fires its onDidCreateEditor event.
+
+FOLLOW-UP Q: What is the difference between waitForSelector and waitForFunction in Playwright?
+ANSWER:
+waitForSelector waits until a DOM element matching a CSS selector
+exists and is visible. It is the right tool when you are waiting
+for a specific element to appear. waitForFunction evaluates an
+arbitrary JavaScript expression in the browser context repeatedly
+until it returns true — it is more flexible and used for
+conditions that do not map to a simple selector, like "wait until
+the pre element contains the text '5'". The smoke test uses both:
+waitForSelector for Monaco initialization, waitForFunction for
+the output assertion.
+
+----------------------------------------------------------------
+Q20. You built a whole custom programming language. What would you do 
+     differently if you were starting J++ again today?
+----------------------------------------------------------------
+
+STRONG ANSWER:
+Three things. First, I would add TypeScript from the start.
+The compiler modules have clear interfaces — Token, ASTNode,
+CompileResult — and typing them upfront would have caught
+several bugs early and made the code more maintainable.
+Second, I would design the operator set with OOP in mind from
+the beginning. Using "." for concatenation was convenient for
+the MVP but creates a collision if I ever add method calls —
+I would use a named function or a different symbol from day one.
+Third, I would write the Playwright e2e specs as proper
+@playwright/test specs before writing the application code —
+test-driven development at the integration level forces you to
+define the user-visible contract first, which often reveals
+design problems earlier than unit tests alone.
+
+FOLLOW-UP Q: If you could add one feature to J++ right now, what would it be?
+ANSWER:
+Functions. Right now J++ is essentially a scripting language —
+you can declare variables, do arithmetic and concatenation, and
+print output, but there is no way to define reusable logic.
+Adding a function declaration syntax like "fn add(a, b) { ...
+return a + b }" would make J++ Turing-complete in a meaningful
+way and would require interesting extensions to the type checker —
+you would need to infer or annotate function parameter types and
+return types. It would also be a good test of whether the
+compiler architecture is extensible, which it is.
+
+
+================================================================
+QUICK REFERENCE: THINGS TO NEVER SAY IN THE INTERVIEW
+================================================================
+
+1. Do NOT say "MongoDB" — your project does not use MongoDB.
+   Auth is file-based, cookie-based sessions via authStore.cjs.
+
+2. Do NOT say "no idea" — even a partial answer is better.
+   Say "I have not gone deep into that specific area, but my
+   understanding is..." and give what you know.
+
+3. Do NOT exaggerate the security model. Be honest that
+   worker thread sandboxing is not container-grade isolation.
+   Owning the trade-off is impressive, hiding it is not.
+
+4. Do NOT say the Playwright e2e tests are fully done.
+   The smoke script exists; full spec-style tests are in progress.
+
+5. Do NOT confuse TF-IDF with semantic embeddings. Know the
+   difference and be able to say why you chose TF-IDF for
+   this specific use case.
+
+
+================================================================
+60-SECOND VERBAL WALKTHROUGH (memorize this)
+================================================================
+
+"J++ is a custom programming language that compiles to JavaScript.
+Its goal is to eliminate implicit type coercion — in JavaScript,
+1 plus the string 1 gives you the string 11, which is a common
+source of bugs. In J++, plus is numeric-only and dot is
+string-concatenation-only, so mixing types is a compile-time
+error. I built a full compiler pipeline: a lexer that tokenizes
+source code, a parser that builds an AST, a type checker that
+validates all expressions, and a code generator that emits plain
+JavaScript. That JS runs in a constrained worker thread on the
+server. I wrapped this in a Next.js web IDE with Monaco editor,
+cookie-based auth with CSRF protection and rate limiting, and a
+RAG-based docs chat that uses TF-IDF retrieval to ground the
+LLM's answers in the actual J++ documentation. Everything lives
+in an Nx monorepo shared between the web UI and a CLI package."
+
+================================================================
+END OF DOCUMENT
+================================================================

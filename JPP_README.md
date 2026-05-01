@@ -133,3 +133,15 @@ node lib/jpp/tests.js
 ```bash
 npm test
 ```
+
+## 8) Interview Talking Points (Non-Deep but Solid)
+- J++ is intentionally small so the compiler pipeline is easy to explain end-to-end.
+- Strong compile-time checks demonstrate language design choices, not just syntax changes.
+- The IDE shows a complete loop: source -> compile -> execute -> diagnostics.
+- The project proves full-stack ownership: language runtime + API + UI + docs assistant.
+
+## 9) Near-Term Language Additions
+- boolean literals and richer conditional expressions
+- basic arrays and indexed access
+- small standard library helpers (`len`, string utils, number parse helpers)
+- better error spans for IDE-level inline diagnostics

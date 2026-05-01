@@ -1,0 +1,2093 @@
+# J++ LSP — Next.js App Router + Monaco Editor
+# Complete 4-Day Implementation Plan for Cursor
+# ==============================================
+#
+# GIVE THIS ENTIRE FILE TO CURSOR AS CONTEXT BEFORE STARTING.
+# Follow days in strict order. Do not jump ahead.
+# Every file path, every change, every line is described here.
+
+================================================================
+REPO CONTEXT (read before touching anything)
+================================================================
+
+Your repo already has this structure:
+  /
+  ├── app/                        ← Next.js App Router
+  │   ├── page.tsx (or similar)
+  │   ├── editor/
+  │   │   └── page.tsx            ← Your existing web editor page
+  │   └── api/                    ← Next.js API routes (Route Handlers)
+  ├── lib/                        ← Shared code
+  │   └── jpp/                    ← J++ compiler lives here
+  │       ├── lexer.js
+  │       ├── parser.js
+  │       ├── typeChecker.js
+  │       ├── generator.js
+  │       └── compiler.js
+  ├── cli/                        ← CLI package, leave untouched
+  ├── public/
+  ├── package.json
+  └── next.config.js / next.config.mjs
+
+WHAT WE ARE BUILDING:
+  A real LSP server running as a WebSocket process alongside Next.js.
+  The Monaco editor in your web editor page connects to it via WebSocket
+  using the Monaco Language Client library, speaking real JSON-RPC 2.0
+  LSP protocol. No HTTP polling. Real LSP.
+
+WHY NOT NEXT.JS API ROUTES FOR LSP:
+  Next.js API routes (Route Handlers) are HTTP only. They do not support
+  raw WebSocket connections. The LSP protocol over WebSocket requires a
+  persistent bidirectional connection that Next.js Route Handlers cannot
+  provide. We need a separate Node.js WebSocket server process.
+
+HOW BOTH PROCESSES ARE DEPLOYED TOGETHER:
+  Option A (recommended): Run both from one start command using
+  concurrently. Next.js on port 3000, LSP server on port 3001.
+  Your deployment platform (Vercel, Railway, Render) runs both.
+  
+  Note: Vercel does NOT support long-running WebSocket servers.
+  Use Railway or Render which support multiple processes.
+  
+  Option B: Deploy LSP server separately (e.g. Railway) and
+  Next.js separately (Vercel). Just set the LSP URL env var.
+  We build for Option B since it is more flexible, but Option A
+  works locally during development.
+
+FINAL STRUCTURE AFTER IMPLEMENTATION:
+
+  /
+  ├── app/
+  │   ├── editor/
+  │   │   └── page.tsx            ← MODIFIED: add Monaco Language Client
+  │   └── api/
+  │       └── compile/
+  │           └── route.ts        ← NEW: HTTP route for Run button only
+  ├── lib/
+  │   └── jpp/
+  │       ├── lexer.js            ← MODIFIED: tokens get line + col
+  │       ├── parser.js           ← MODIFIED: AST nodes get line + col
+  │       ├── typeChecker.js      ← MODIFIED: symbols store position
+  │       ├── generator.js        ← UNCHANGED
+  │       └── compiler.js         ← MODIFIED: exports typeCheck separately
+  ├── lsp-server/                 ← NEW: standalone WebSocket LSP process
+  │   ├── server.js               ← entry point
+  │   ├── analysis.js             ← runs compiler pipeline
+  │   ├── hover.js
+  │   ├── completion.js
+  │   ├── definition.js
+  │   ├── symbols.js
+  │   └── package.json            ← separate package with ws dependency
+  ├── cli/                        ← UNTOUCHED
+  ├── package.json                ← MODIFIED: add dev script + monaco deps
+  └── next.config.mjs             ← MODIFIED: allow cross-origin for LSP
+
+================================================================
+DAY 1 — COMPILER CHANGES + LSP SERVER FOUNDATION
+================================================================
+Goal by end of Day 1:
+- Every token has line + col
+- AST Declaration/Assignment nodes have line + col
+- LSP server starts and accepts WebSocket connections
+- initialize handshake works (test with wscat)
+- publishDiagnostics fires on didOpen
+
+----------------------------------------------------------------
+TASK 1.1 — Modify lib/jpp/lexer.js
+----------------------------------------------------------------
+
+FULL REPLACEMENT. Paste this entire file, replacing lib/jpp/lexer.js:
+
+```javascript
+// lib/jpp/lexer.js
+'use strict';
+
+function lexer(input) {
+  const tokens = [];
+  let cursor = 0;
+  let line = 1;
+  let col = 1;
+
+  function advance() {
+    const ch = input[cursor];
+    cursor++;
+    if (ch === '\n') { line++; col = 1; }
+    else { col++; }
+    return ch;
+  }
+
+  function peek(offset = 0) {
+    return input[cursor + offset] || '';
+  }
+
+  while (cursor < input.length) {
+    let char = input[cursor];
+
+    // Skip whitespace
+    if (/\s/.test(char)) { advance(); continue; }
+
+    // Single-line comments
+    if (char === '/' && peek(1) === '/') {
+      while (cursor < input.length && input[cursor] !== '\n') advance();
+      continue;
+    }
+
+    // Multi-line comments
+    if (char === '/' && peek(1) === '*') {
+      advance(); advance();
+      while (cursor + 1 < input.length &&
+             !(input[cursor] === '*' && peek(1) === '/')) advance();
+      advance(); advance();
+      continue;
+    }
+
+    // Capture position for this token AFTER skipping whitespace/comments
+    const tokenLine = line;
+    const tokenCol = col;
+
+    // String literals — double quotes
+    if (char === '"') {
+      advance();
+      let str = '';
+      while (cursor < input.length && input[cursor] !== '"') {
+        if (input[cursor] === '\\' && cursor + 1 < input.length) {
+          advance();
+          const next = input[cursor];
+          if (next === 'n') str += '\n';
+          else if (next === 't') str += '\t';
+          else if (next === '\\') str += '\\';
+          else if (next === '"') str += '"';
+          else str += next;
+          advance();
+        } else { str += input[cursor]; advance(); }
+      }
+      if (cursor >= input.length) {
+        const err = new Error('Unclosed string literal');
+        err.line = tokenLine; err.col = tokenCol; throw err;
+      }
+      advance(); // closing quote
+      tokens.push({ type: 'string', value: str, line: tokenLine, col: tokenCol });
+      continue;
+    }
+
+    // String literals — single quotes
+    if (char === "'") {
+      advance();
+      let str = '';
+      while (cursor < input.length && input[cursor] !== "'") {
+        if (input[cursor] === '\\' && cursor + 1 < input.length) {
+          advance();
+          const next = input[cursor];
+          if (next === 'n') str += '\n';
+          else if (next === 't') str += '\t';
+          else if (next === '\\') str += '\\';
+          else if (next === "'") str += "'";
+          else str += next;
+          advance();
+        } else { str += input[cursor]; advance(); }
+      }
+      if (cursor >= input.length) {
+        const err = new Error('Unclosed string literal');
+        err.line = tokenLine; err.col = tokenCol; throw err;
+      }
+      advance();
+      tokens.push({ type: 'string', value: str, line: tokenLine, col: tokenCol });
+      continue;
+    }
+
+    // Multi-word keywords — MUST check before single-word identifier logic
+    if (input.slice(cursor).startsWith('nahi agar')) {
+      tokens.push({ type: 'keyword', value: 'nahi agar', line: tokenLine, col: tokenCol });
+      for (let i = 0; i < 9; i++) advance();
+      continue;
+    }
+
+    if (input.slice(cursor).startsWith('ke liye')) {
+      const after = cursor + 7;
+      const boundaryOk = after >= input.length || !/[a-zA-Z0-9_]/.test(input[after]);
+      if (boundaryOk) {
+        tokens.push({ type: 'keyword', value: 'ke liye', line: tokenLine, col: tokenCol });
+        for (let i = 0; i < 7; i++) advance();
+        continue;
+      }
+    }
+
+    // Identifiers and single-word keywords
+    if (/[a-zA-Z_]/.test(char)) {
+      let word = '';
+      while (cursor < input.length && /[a-zA-Z0-9_]/.test(input[cursor])) {
+        word += input[cursor]; advance();
+      }
+      const keywords = ['ye','bol','agar','nahi','jabtak','tak','break','continue'];
+      tokens.push({
+        type: keywords.includes(word) ? 'keyword' : 'identifier',
+        value: word,
+        line: tokenLine,
+        col: tokenCol
+      });
+      continue;
+    }
+
+    // Numbers
+    if (/[0-9]/.test(char)) {
+      let num = '';
+      while (cursor < input.length && /[0-9]/.test(input[cursor])) {
+        num += input[cursor]; advance();
+      }
+      tokens.push({ type: 'number', value: num, line: tokenLine, col: tokenCol });
+      continue;
+    }
+
+    // Dot operator — string concatenation
+    if (char === '.') {
+      if (peek(1) === '.') {
+        const err = new Error('Unexpected ".." operator (not supported)');
+        err.line = tokenLine; err.col = tokenCol; throw err;
+      }
+      tokens.push({ type: 'operator', value: '.', line: tokenLine, col: tokenCol });
+      advance();
+      continue;
+    }
+
+    // Multi-char and single-char operators
+    if (/[\+\-\*\/\=\<\>\!]/.test(char)) {
+      if (char === '=' && peek(1) === '=') {
+        tokens.push({ type: 'operator', value: '==', line: tokenLine, col: tokenCol });
+        advance(); advance();
+      } else if (char === '<' && peek(1) === '=') {
+        tokens.push({ type: 'operator', value: '<=', line: tokenLine, col: tokenCol });
+        advance(); advance();
+      } else if (char === '>' && peek(1) === '=') {
+        tokens.push({ type: 'operator', value: '>=', line: tokenLine, col: tokenCol });
+        advance(); advance();
+      } else if (char === '!' && peek(1) === '=') {
+        tokens.push({ type: 'operator', value: '!=', line: tokenLine, col: tokenCol });
+        advance(); advance();
+      } else {
+        tokens.push({ type: 'operator', value: char, line: tokenLine, col: tokenCol });
+        advance();
+      }
+      continue;
+    }
+
+    // Braces
+    if (char === '{' || char === '}') {
+      tokens.push({ type: 'brace', value: char, line: tokenLine, col: tokenCol });
+      advance(); continue;
+    }
+
+    // Parentheses
+    if (char === '(' || char === ')') {
+      tokens.push({ type: 'paren', value: char, line: tokenLine, col: tokenCol });
+      advance(); continue;
+    }
+
+    // Unknown — skip
+    advance();
+  }
+
+  return tokens;
+}
+
+module.exports = lexer;
+```
+
+----------------------------------------------------------------
+TASK 1.2 — Modify lib/jpp/parser.js
+----------------------------------------------------------------
+
+Make ONLY these targeted changes. Leave everything else untouched.
+
+CHANGE 1 — Replace parseDeclaration:
+```javascript
+function parseDeclaration(tokens) {
+  const yeToken = tokens.shift(); // 'ye' keyword
+  if (tokens.length === 0 || tokens[0].type !== 'identifier') {
+    const err = new Error('Expected identifier after "ye"');
+    err.line = yeToken.line; err.col = yeToken.col; throw err;
+  }
+  const nameToken = tokens.shift();
+  let value = null;
+  if (tokens.length > 0 && tokens[0].type === 'operator' && tokens[0].value === '=') {
+    tokens.shift();
+    value = parseExpression(tokens);
+  }
+  return {
+    type: 'Declaration',
+    name: nameToken.value,
+    value,
+    line: nameToken.line,
+    col: nameToken.col
+  };
+}
+```
+
+CHANGE 2 — Replace parseAssignment:
+```javascript
+function parseAssignment(tokens) {
+  const nameToken = tokens.shift();
+  if (tokens.length === 0 || tokens[0].type !== 'operator' || tokens[0].value !== '=') {
+    const err = new Error(`Expected "=" after identifier "${nameToken.value}"`);
+    err.line = nameToken.line; err.col = nameToken.col; throw err;
+  }
+  tokens.shift();
+  const value = parseExpression(tokens);
+  return {
+    type: 'Assignment',
+    name: nameToken.value,
+    value,
+    line: nameToken.line,
+    col: nameToken.col
+  };
+}
+```
+
+CHANGE 3 — Replace parsePrimary:
+```javascript
+function parsePrimary(tokens) {
+  if (tokens.length === 0) throw new Error('Unexpected end of expression');
+  const token = tokens[0];
+
+  if (token.type === 'paren' && token.value === '(') {
+    tokens.shift();
+    const expr = parseExpression(tokens);
+    if (tokens.length === 0 || tokens[0].type !== 'paren' || tokens[0].value !== ')') {
+      throw new Error('Expected ")" after expression');
+    }
+    tokens.shift();
+    return expr;
+  }
+  if (token.type === 'number') {
+    tokens.shift();
+    return { type: 'Number', value: parseInt(token.value, 10), line: token.line, col: token.col };
+  }
+  if (token.type === 'string') {
+    tokens.shift();
+    return { type: 'String', value: token.value, line: token.line, col: token.col };
+  }
+  if (token.type === 'identifier') {
+    tokens.shift();
+    return { type: 'Identifier', value: token.value, line: token.line, col: token.col };
+  }
+  const err = new Error(`Unexpected token: ${token.value}`);
+  err.line = token.line; err.col = token.col; throw err;
+}
+```
+
+CHANGE 4 — Replace parseForStatement to capture varToken position:
+```javascript
+function parseForStatement(tokens) {
+  const forToken = tokens.shift(); // 'ke liye'
+  if (tokens.length === 0 || tokens[0].type !== 'identifier') {
+    throw new Error('Expected identifier in for loop');
+  }
+  const varToken = tokens.shift();
+  if (tokens.length === 0 || tokens[0].value !== '=') throw new Error('Expected "=" in for loop');
+  tokens.shift();
+  const start = parseExpression(tokens);
+  if (tokens.length === 0 || tokens[0].value !== 'tak') throw new Error('Expected "tak" in for loop');
+  tokens.shift();
+  const end = parseExpression(tokens);
+  if (tokens.length === 0 || tokens[0].value !== '{') throw new Error('Expected "{" after for condition');
+  tokens.shift();
+  const body = parseBlock(tokens, true);
+  return {
+    type: 'ForStatement',
+    variable: varToken.value,
+    start, end, body,
+    line: forToken.line, col: forToken.col,
+    varLine: varToken.line, varCol: varToken.col
+  };
+}
+```
+
+----------------------------------------------------------------
+TASK 1.3 — Modify lib/jpp/typeChecker.js
+----------------------------------------------------------------
+
+Make ONLY these targeted changes. Leave everything else untouched.
+
+CHANGE 1 — Replace checkDeclaration:
+```javascript
+checkDeclaration(name, valueNode, declLine, declCol) {
+  if (this.symbols.has(name)) {
+    const err = new Error(`Variable "${name}" already declared`);
+    err.line = declLine || 0; err.col = declCol || 0; throw err;
+  }
+  let type = 'number';
+  if (valueNode) { type = this.inferType(valueNode); }
+  this.symbols.set(name, { type, line: declLine || 0, col: declCol || 0 });
+}
+```
+
+CHANGE 2 — Replace checkAssignment:
+```javascript
+checkAssignment(name, valueNode, assignLine, assignCol) {
+  const symInfo = this.symbols.get(name);
+  if (!symInfo) {
+    const err = new Error(`Variable "${name}" not declared`);
+    err.line = assignLine || 0; err.col = assignCol || 0; throw err;
+  }
+  const newType = this.inferType(valueNode);
+  if (newType !== symInfo.type) {
+    const err = new Error(
+      `Type mismatch: cannot assign ${newType} to "${name}" (declared as ${symInfo.type})`
+    );
+    err.line = assignLine || 0; err.col = assignCol || 0; throw err;
+  }
+}
+```
+
+CHANGE 3 — In inferType, replace the Identifier case:
+```javascript
+case 'Identifier': {
+  const symInfo = this.symbols.get(node.value);
+  if (!symInfo) {
+    const err = new Error(`Variable "${node.value}" used before declaration`);
+    err.line = node.line || 0; err.col = node.col || 0; throw err;
+  }
+  return symInfo.type;
+}
+```
+
+CHANGE 4 — Replace getVariableInfo:
+```javascript
+getVariableInfo(name) {
+  return this.symbols.get(name) || null;
+  // now returns { type, line, col } or null
+}
+```
+
+CHANGE 5 — Replace getVariables:
+```javascript
+getVariables() {
+  const result = new Map();
+  for (const [name, info] of this.symbols) {
+    result.set(name, info.type);
+  }
+  return result;
+}
+```
+
+----------------------------------------------------------------
+TASK 1.4 — Modify lib/jpp/compiler.js
+----------------------------------------------------------------
+
+CHANGE 1 — In the typeCheck function (the one inside compiler.js, not
+the class method), update the Declaration case:
+```javascript
+case 'Declaration':
+  if (stmt.value) typeChecker.checkExpression(stmt.value);
+  typeChecker.checkDeclaration(stmt.name, stmt.value, stmt.line, stmt.col);
+  break;
+```
+
+CHANGE 2 — Update the Assignment case:
+```javascript
+case 'Assignment':
+  typeChecker.checkAssignment(stmt.name, stmt.value, stmt.line, stmt.col);
+  break;
+```
+
+CHANGE 3 — At the bottom of compiler.js, change the export:
+```javascript
+// was: module.exports = compileJPlusPlus;
+// change to:
+module.exports = { compileJPlusPlus, typeCheck };
+```
+
+----------------------------------------------------------------
+TASK 1.5 — Create lsp-server/ as a separate Node package
+----------------------------------------------------------------
+
+Create this folder at the root of your repo (sibling to app/, lib/, cli/):
+
+  mkdir lsp-server
+  cd lsp-server
+  npm init -y
+  npm install ws
+
+lsp-server/package.json should look like:
+```json
+{
+  "name": "jpp-lsp-server",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}
+```
+
+NOTE: lsp-server uses require() to load lib/jpp/* using relative paths
+like require('../lib/jpp/lexer'). This works because lsp-server/ is a
+sibling of lib/. No copying of compiler files needed.
+
+----------------------------------------------------------------
+TASK 1.6 — Create lsp-server/analysis.js
+----------------------------------------------------------------
+
+```javascript
+// lsp-server/analysis.js
+'use strict';
+
+const lexer = require('../lib/jpp/lexer');
+const parser = require('../lib/jpp/parser');
+const TypeChecker = require('../lib/jpp/typeChecker');
+const { typeCheck } = require('../lib/jpp/compiler');
+
+/**
+ * Run the full J++ analysis pipeline on source code.
+ *
+ * Returns:
+ * {
+ *   tokens: Array<{type, value, line, col}>,
+ *   ast: object | null,
+ *   typeChecker: TypeChecker | null,
+ *   errors: Array<{message, line, col, endCol, severity, phase}>
+ * }
+ *
+ * IMPORTANT: Even when errors occur, we return whatever partial data
+ * exists from earlier phases. This lets hover/completion work even
+ * when the file has errors (which is most of the time while editing).
+ *
+ * All line/col values are 1-indexed here.
+ * The LSP transport converts to 0-indexed before sending to the client.
+ */
+function analyze(sourceCode) {
+  const errors = [];
+  let tokens = [];
+  let ast = null;
+  let tc = null;
+
+  // Phase 1: Lex
+  try {
+    tokens = lexer(sourceCode);
+  } catch (e) {
+    errors.push(makeError(e, 'lexer'));
+    return { tokens: [], ast: null, typeChecker: null, errors };
+  }
+
+  // Phase 2: Parse
+  // Pass a copy — parser mutates the token array
+  try {
+    ast = parser([...tokens]);
+  } catch (e) {
+    errors.push(makeError(e, 'parser'));
+    return { tokens, ast: null, typeChecker: null, errors };
+  }
+
+  // Phase 3: Type check
+  tc = new TypeChecker();
+  try {
+    typeCheck(ast, tc);
+  } catch (e) {
+    errors.push(makeError(e, 'typecheck'));
+    // Do NOT return early — tc has partial symbol table, still useful
+  }
+
+  return { tokens, ast, typeChecker: tc, errors };
+}
+
+function makeError(e, phase) {
+  const line = e.line || 1;
+  const col  = e.col  || 1;
+  return {
+    message:  e.message || 'Unknown error',
+    line,
+    col,
+    endCol:   col + Math.max(8, Math.min((e.message || '').length, 25)),
+    severity: 'error',
+    phase
+  };
+}
+
+module.exports = { analyze };
+```
+
+----------------------------------------------------------------
+TASK 1.7 — Create lsp-server/hover.js
+----------------------------------------------------------------
+
+```javascript
+// lsp-server/hover.js
+'use strict';
+
+const KEYWORD_DOCS = {
+  'ye':        '**ye** — declare a variable\n\n`ye name = value`',
+  'bol':       '**bol** — print to output\n\n`bol expression`',
+  'agar':      '**agar** — if statement\n\n`agar condition { ... }`',
+  'nahi':      '**nahi** — else branch\n\n`} nahi { ... }`',
+  'nahi agar': '**nahi agar** — else-if\n\n`} nahi agar condition { ... }`',
+  'jabtak':    '**jabtak** — while loop\n\n`jabtak condition { ... }`',
+  'ke liye':   '**ke liye** — for loop\n\n`ke liye i = start tak end { ... }`',
+  'tak':       '**tak** — exclusive upper bound in for loop',
+  'break':     '**break** — exit the current loop immediately',
+  'continue':  '**continue** — skip to the next loop iteration',
+};
+
+const OPERATOR_DOCS = {
+  '+':  '`+` — numeric addition *(numbers only, no coercion)*',
+  '-':  '`-` — numeric subtraction',
+  '*':  '`*` — numeric multiplication',
+  '/':  '`/` — numeric division',
+  '.':  '`.` — string concatenation *(strings only, no coercion)*',
+  '==': '`==` — equality comparison',
+  '!=': '`!=` — inequality comparison',
+  '<':  '`<` — less than',
+  '>':  '`>` — greater than',
+  '<=': '`<=` — less than or equal',
+  '>=': '`>=` — greater than or equal',
+  '=':  '`=` — assignment',
+};
+
+/**
+ * line and col are 1-indexed.
+ * Returns { content: string (markdown), range: {line, col, endCol} } or null.
+ */
+function getHover(line, col, tokens, typeChecker) {
+  if (!tokens || tokens.length === 0) return null;
+
+  const token = tokens.find(t => {
+    const len = String(t.value).length;
+    return t.line === line && col >= t.col && col < t.col + len;
+  });
+
+  if (!token) return null;
+
+  const range = {
+    line:   token.line,
+    col:    token.col,
+    endCol: token.col + String(token.value).length
+  };
+
+  if (token.type === 'keyword') {
+    const doc = KEYWORD_DOCS[token.value];
+    return doc ? { content: doc, range } : null;
+  }
+
+  if (token.type === 'identifier') {
+    if (!typeChecker) {
+      return {
+        content: `**${token.value}** — identifier *(type unknown, file has errors)*`,
+        range
+      };
+    }
+    const info = typeChecker.getVariableInfo(token.value);
+    if (info) {
+      const declNote = info.line
+        ? `\n\n*Declared at line ${info.line}, col ${info.col}*`
+        : '';
+      return {
+        content: `**${token.value}**: \`${info.type}\`${declNote}`,
+        range
+      };
+    }
+    return {
+      content: `**${token.value}** — ⚠️ undeclared variable`,
+      range
+    };
+  }
+
+  if (token.type === 'number') {
+    return {
+      content: `\`${token.value}\` — number literal`,
+      range
+    };
+  }
+
+  if (token.type === 'string') {
+    const preview = token.value.length > 40
+      ? token.value.slice(0, 40) + '…'
+      : token.value;
+    return {
+      content: `\`"${preview}"\` — string literal *(${token.value.length} chars)*`,
+      range
+    };
+  }
+
+  if (token.type === 'operator') {
+    const doc = OPERATOR_DOCS[token.value];
+    return doc ? { content: doc, range } : null;
+  }
+
+  return null;
+}
+
+module.exports = { getHover };
+```
+
+----------------------------------------------------------------
+TASK 1.8 — Create lsp-server/completion.js
+----------------------------------------------------------------
+
+```javascript
+// lsp-server/completion.js
+'use strict';
+
+const KEYWORDS = [
+  { label: 'ye',        detail: 'declare variable',    doc: '`ye name = value`' },
+  { label: 'bol',       detail: 'print value',         doc: '`bol expression`' },
+  { label: 'agar',      detail: 'if statement',        doc: '`agar condition { }`' },
+  { label: 'nahi',      detail: 'else branch',         doc: '`} nahi {`' },
+  { label: 'nahi agar', detail: 'else-if branch',      doc: '`} nahi agar condition {`' },
+  { label: 'jabtak',    detail: 'while loop',          doc: '`jabtak condition { }`' },
+  { label: 'ke liye',   detail: 'for loop',            doc: '`ke liye i = 0 tak 10 { }`' },
+  { label: 'tak',       detail: 'for loop end bound',  doc: '`ke liye i = 0 tak end`' },
+  { label: 'break',     detail: 'exit loop',           doc: '`break`' },
+  { label: 'continue',  detail: 'next iteration',      doc: '`continue`' },
+];
+
+/**
+ * line and col are 1-indexed.
+ * Returns array of { label, kind, detail, documentation }.
+ * kind: 'keyword' | 'variable'
+ */
+function getCompletions(line, col, tokens, typeChecker) {
+  const items = [];
+
+  // Determine prefix at cursor to filter results
+  let prefix = '';
+  if (tokens && line && col) {
+    const tok = tokens.find(t =>
+      t.line === line &&
+      col > t.col &&
+      col <= t.col + String(t.value).length &&
+      (t.type === 'identifier' || t.type === 'keyword')
+    );
+    if (tok) {
+      prefix = String(tok.value).slice(0, col - tok.col).toLowerCase();
+    }
+  }
+
+  for (const kw of KEYWORDS) {
+    if (!prefix || kw.label.startsWith(prefix)) {
+      items.push({
+        label:         kw.label,
+        kind:          'keyword',
+        detail:        kw.detail,
+        documentation: kw.doc,
+      });
+    }
+  }
+
+  if (typeChecker) {
+    for (const [name, type] of typeChecker.getVariables()) {
+      if (!prefix || name.toLowerCase().startsWith(prefix)) {
+        items.push({
+          label:         name,
+          kind:          'variable',
+          detail:        `${type} variable`,
+          documentation: `J++ variable of type \`${type}\``,
+        });
+      }
+    }
+  }
+
+  return items;
+}
+
+module.exports = { getCompletions };
+```
+
+----------------------------------------------------------------
+TASK 1.9 — Create lsp-server/definition.js
+----------------------------------------------------------------
+
+```javascript
+// lsp-server/definition.js
+'use strict';
+
+/**
+ * Returns { line, col, endCol } of the declaration for the
+ * identifier at the given position, or null.
+ * line/col are 1-indexed.
+ */
+function getDefinition(line, col, tokens, ast) {
+  if (!tokens || !ast) return null;
+
+  const token = tokens.find(t =>
+    t.type === 'identifier' &&
+    t.line === line &&
+    col >= t.col &&
+    col < t.col + t.value.length
+  );
+  if (!token) return null;
+
+  const decl = findDeclaration(ast.body, token.value);
+  if (!decl) return null;
+
+  return {
+    line:   decl.line,
+    col:    decl.col,
+    endCol: decl.col + decl.name.length
+  };
+}
+
+function findDeclaration(stmts, name) {
+  for (const stmt of stmts) {
+    if (stmt.type === 'Declaration' && stmt.name === name) return stmt;
+    if (stmt.body) {
+      const f = findDeclaration(stmt.body, name);
+      if (f) return f;
+    }
+    if (stmt.elseBody) {
+      const f = findDeclaration(stmt.elseBody, name);
+      if (f) return f;
+    }
+    if (stmt.elseIf) {
+      for (const elif of stmt.elseIf) {
+        const f = findDeclaration(elif.body || [], name);
+        if (f) return f;
+      }
+    }
+  }
+  return null;
+}
+
+module.exports = { getDefinition };
+```
+
+----------------------------------------------------------------
+TASK 1.10 — Create lsp-server/symbols.js
+----------------------------------------------------------------
+
+```javascript
+// lsp-server/symbols.js
+'use strict';
+
+/**
+ * Returns all named symbols for the document outline.
+ * Each: { name, type, line, col, endCol, kind }
+ * kind: 'variable' | 'loop-variable'
+ */
+function getSymbols(ast, typeChecker) {
+  if (!ast) return [];
+  const symbols = [];
+  walkStatements(ast.body || [], symbols, typeChecker);
+  return symbols;
+}
+
+function walkStatements(stmts, symbols, typeChecker) {
+  for (const stmt of stmts) {
+    if (stmt.type === 'Declaration') {
+      const info = typeChecker ? typeChecker.getVariableInfo(stmt.name) : null;
+      symbols.push({
+        name:   stmt.name,
+        type:   info ? info.type : 'unknown',
+        line:   stmt.line || 0,
+        col:    stmt.col  || 0,
+        endCol: (stmt.col || 0) + stmt.name.length,
+        kind:   'variable'
+      });
+    }
+    if (stmt.type === 'ForStatement') {
+      symbols.push({
+        name:   stmt.variable,
+        type:   'number',
+        line:   stmt.varLine || stmt.line || 0,
+        col:    stmt.varCol  || stmt.col  || 0,
+        endCol: (stmt.varCol || stmt.col || 0) + stmt.variable.length,
+        kind:   'loop-variable'
+      });
+      if (stmt.body) walkStatements(stmt.body, symbols, typeChecker);
+    }
+    if (stmt.type === 'WhileStatement' && stmt.body) {
+      walkStatements(stmt.body, symbols, typeChecker);
+    }
+    if (stmt.type === 'IfStatement') {
+      if (stmt.body)     walkStatements(stmt.body,     symbols, typeChecker);
+      if (stmt.elseBody) walkStatements(stmt.elseBody, symbols, typeChecker);
+      if (stmt.elseIf) {
+        for (const elif of stmt.elseIf)
+          walkStatements(elif.body || [], symbols, typeChecker);
+      }
+    }
+  }
+}
+
+module.exports = { getSymbols };
+```
+
+----------------------------------------------------------------
+TASK 1.11 — Create lsp-server/server.js
+----------------------------------------------------------------
+
+This is the entire LSP server. It speaks real JSON-RPC 2.0 over
+WebSocket, implementing the LSP protocol manually. No LSP library
+needed on the server side — the protocol is just JSON.
+
+```javascript
+// lsp-server/server.js
+'use strict';
+
+const { WebSocketServer } = require('ws');
+const { analyze }        = require('./analysis');
+const { getHover }       = require('./hover');
+const { getCompletions } = require('./completion');
+const { getDefinition }  = require('./definition');
+const { getSymbols }     = require('./symbols');
+
+const PORT = process.env.LSP_PORT || 3001;
+
+const wss = new WebSocketServer({ port: PORT });
+
+console.log(`[J++ LSP] WebSocket server listening on ws://localhost:${PORT}`);
+
+wss.on('connection', (ws, req) => {
+  console.log('[J++ LSP] Client connected:', req.socket.remoteAddress);
+
+  // Per-connection document store
+  // key: uri (string), value: { text: string, version: number }
+  const documents     = new Map();
+  const debounceTimers = new Map();
+
+  // ---- helpers ----
+
+  function send(obj) {
+    if (ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify(obj));
+    }
+  }
+
+  // LSP response (has id)
+  function respond(id, result) {
+    send({ jsonrpc: '2.0', id, result });
+  }
+
+  // LSP error response
+  function respondError(id, code, message) {
+    send({ jsonrpc: '2.0', id, error: { code, message } });
+  }
+
+  // LSP notification (no id, no response expected from client)
+  function notify(method, params) {
+    send({ jsonrpc: '2.0', method, params });
+  }
+
+  // Run analysis and push diagnostics to client for a given uri+text.
+  // Debounced per uri — waits 250ms after last change.
+  function scheduleDiagnostics(uri, text) {
+    if (debounceTimers.has(uri)) clearTimeout(debounceTimers.get(uri));
+    debounceTimers.set(uri, setTimeout(() => {
+      const result = analyze(text);
+
+      // LSP uses 0-indexed line and character positions.
+      // Our tokens/errors use 1-indexed. Convert here.
+      const diagnostics = result.errors.map(e => ({
+        range: {
+          start: {
+            line:      Math.max(0, e.line - 1),
+            character: Math.max(0, e.col  - 1)
+          },
+          end: {
+            line:      Math.max(0, e.line - 1),
+            character: Math.max(0, e.endCol - 1)
+          }
+        },
+        severity: 1,   // 1=Error 2=Warning 3=Info 4=Hint
+        message:  e.message,
+        source:   'J++'
+      }));
+
+      notify('textDocument/publishDiagnostics', { uri, diagnostics });
+    }, 250));
+  }
+
+  // ---- message handler ----
+
+  ws.on('message', (raw) => {
+    let msg;
+    try { msg = JSON.parse(raw.toString()); }
+    catch { return; }
+
+    const { id, method, params } = msg;
+
+    switch (method) {
+
+      // ===== LIFECYCLE =====
+
+      case 'initialize':
+        respond(id, {
+          capabilities: {
+            // Full sync: client sends entire file content on every change.
+            // Simpler than incremental and fine for files of this size.
+            textDocumentSync: {
+              openClose: true,
+              change: 1   // 1 = Full
+            },
+            hoverProvider:          true,
+            completionProvider: {
+              triggerCharacters:  [' ', '\n'],
+              resolveProvider:    false
+            },
+            definitionProvider:     true,
+            documentSymbolProvider: true,
+          },
+          serverInfo: {
+            name:    'J++ Language Server',
+            version: '1.0.0'
+          }
+        });
+        break;
+
+      case 'initialized':
+        // Client acknowledges. No response needed (it's a notification).
+        break;
+
+      case 'shutdown':
+        respond(id, null);
+        break;
+
+      case 'exit':
+        ws.close();
+        break;
+
+      // ===== DOCUMENT SYNC =====
+
+      case 'textDocument/didOpen': {
+        const { textDocument } = params;
+        documents.set(textDocument.uri, {
+          text:    textDocument.text,
+          version: textDocument.version
+        });
+        scheduleDiagnostics(textDocument.uri, textDocument.text);
+        break;
+      }
+
+      case 'textDocument/didChange': {
+        const { textDocument, contentChanges } = params;
+        // Full sync: contentChanges[0].text is the entire new content
+        const text = contentChanges[0].text;
+        documents.set(textDocument.uri, {
+          text,
+          version: textDocument.version
+        });
+        scheduleDiagnostics(textDocument.uri, text);
+        break;
+      }
+
+      case 'textDocument/didClose': {
+        const uri = params.textDocument.uri;
+        documents.delete(uri);
+        if (debounceTimers.has(uri)) {
+          clearTimeout(debounceTimers.get(uri));
+          debounceTimers.delete(uri);
+        }
+        // Clear squiggles for closed file
+        notify('textDocument/publishDiagnostics', { uri, diagnostics: [] });
+        break;
+      }
+
+      // ===== HOVER =====
+
+      case 'textDocument/hover': {
+        const uri = params.textDocument.uri;
+        const doc = documents.get(uri);
+        if (!doc) { respond(id, null); break; }
+
+        // LSP positions are 0-indexed → convert to 1-indexed for our functions
+        const line = params.position.line + 1;
+        const col  = params.position.character + 1;
+
+        const result = analyze(doc.text);
+        const hover  = getHover(line, col, result.tokens, result.typeChecker);
+
+        if (!hover) { respond(id, null); break; }
+
+        respond(id, {
+          contents: { kind: 'markdown', value: hover.content },
+          range: {
+            start: { line: hover.range.line - 1, character: hover.range.col    - 1 },
+            end:   { line: hover.range.line - 1, character: hover.range.endCol - 1 }
+          }
+        });
+        break;
+      }
+
+      // ===== COMPLETION =====
+
+      case 'textDocument/completion': {
+        const uri = params.textDocument.uri;
+        const doc = documents.get(uri);
+        if (!doc) { respond(id, { items: [] }); break; }
+
+        const line = params.position.line + 1;
+        const col  = params.position.character + 1;
+
+        const result   = analyze(doc.text);
+        const rawItems = getCompletions(line, col, result.tokens, result.typeChecker);
+
+        const items = rawItems.map((item, i) => ({
+          label:  item.label,
+          kind:   item.kind === 'keyword' ? 14 : 6,
+          // LSP CompletionItemKind: 14 = Keyword, 6 = Variable
+          detail: item.detail,
+          documentation: {
+            kind:  'markdown',
+            value: item.documentation || ''
+          },
+          sortText: String(i).padStart(5, '0'),
+        }));
+
+        respond(id, { items, isIncomplete: false });
+        break;
+      }
+
+      // ===== GO TO DEFINITION =====
+
+      case 'textDocument/definition': {
+        const uri = params.textDocument.uri;
+        const doc = documents.get(uri);
+        if (!doc) { respond(id, null); break; }
+
+        const line = params.position.line + 1;
+        const col  = params.position.character + 1;
+
+        const result = analyze(doc.text);
+        const def    = getDefinition(line, col, result.tokens, result.ast);
+
+        if (!def) { respond(id, null); break; }
+
+        respond(id, {
+          uri,
+          range: {
+            start: { line: def.line - 1, character: def.col    - 1 },
+            end:   { line: def.line - 1, character: def.endCol - 1 }
+          }
+        });
+        break;
+      }
+
+      // ===== DOCUMENT SYMBOLS =====
+
+      case 'textDocument/documentSymbol': {
+        const uri = params.textDocument.uri;
+        const doc = documents.get(uri);
+        if (!doc) { respond(id, []); break; }
+
+        const result     = analyze(doc.text);
+        const rawSymbols = getSymbols(result.ast, result.typeChecker);
+
+        const symbols = rawSymbols.map(s => ({
+          name:   s.name,
+          detail: s.type,
+          kind:   13,    // LSP SymbolKind.Variable = 13
+          range: {
+            start: { line: s.line - 1, character: s.col    - 1 },
+            end:   { line: s.line - 1, character: s.endCol - 1 }
+          },
+          selectionRange: {
+            start: { line: s.line - 1, character: s.col    - 1 },
+            end:   { line: s.line - 1, character: s.endCol - 1 }
+          }
+        }));
+
+        respond(id, symbols);
+        break;
+      }
+
+      default:
+        // Unknown method — respond with JSON-RPC error only if it had an id
+        if (id !== undefined) {
+          respondError(id, -32601, `Method not found: ${method}`);
+        }
+    }
+  });
+
+  ws.on('close', () => {
+    console.log('[J++ LSP] Client disconnected');
+    debounceTimers.forEach(t => clearTimeout(t));
+  });
+
+  ws.on('error', (err) => {
+    console.error('[J++ LSP] Error:', err.message);
+  });
+});
+```
+
+----------------------------------------------------------------
+TASK 1.12 — Verify Day 1
+----------------------------------------------------------------
+
+Open two terminals:
+
+Terminal 1:
+  cd lsp-server
+  node server.js
+  → Should print: [J++ LSP] WebSocket server listening on ws://localhost:3001
+
+Terminal 2 (install wscat if needed: npm install -g wscat):
+  wscat -c ws://localhost:3001
+
+Paste this (one line):
+  {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}
+
+Expected: Response with capabilities object including hoverProvider: true
+
+Paste this:
+  {"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///test.jpp","version":1,"text":"bol x"}}}
+
+Expected within 250ms: notification with publishDiagnostics containing
+one error "Variable \"x\" used before declaration"
+
+Paste this:
+  {"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///test.jpp","version":1,"text":"ye a = 5\nbol a"}}}
+
+Expected: publishDiagnostics with empty diagnostics array.
+
+If all three work, Day 1 is done.
+
+================================================================
+DAY 2 — MONACO LANGUAGE CLIENT IN NEXT.JS
+================================================================
+Goal by end of Day 2:
+- Monaco editor in your Next.js page connects to the LSP server
+- Real squiggles appear from the server
+- Hover, completion, go-to-definition work in the browser editor
+
+----------------------------------------------------------------
+TASK 2.1 — Install Monaco Language Client in the Next.js app
+----------------------------------------------------------------
+
+In the ROOT of your repo (not in lsp-server/):
+
+  npm install monaco-editor monaco-languageclient vscode-languageclient \
+              vscode-ws-jsonrpc @codingame/monaco-vscode-api \
+              @monaco-editor/react
+
+These packages connect Monaco to an LSP server over WebSocket.
+
+monaco-languageclient: the client side of the LSP protocol for Monaco
+vscode-ws-jsonrpc: bridges WebSocket to JSON-RPC that the client expects
+@monaco-editor/react: easy Monaco integration for React/Next.js
+
+----------------------------------------------------------------
+TASK 2.2 — Modify next.config.mjs
+----------------------------------------------------------------
+
+Monaco and its dependencies use browser-only APIs and must not be
+processed by Next.js server-side rendering. Add this:
+
+```javascript
+// next.config.mjs
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // your existing config here, plus:
+
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Don't bundle Monaco on the server
+      config.externals = [
+        ...(config.externals || []),
+        'monaco-editor',
+        'monaco-languageclient',
+        'vscode-languageclient',
+      ];
+    }
+    return config;
+  },
+
+  // Allow WebSocket connections from the browser to lsp-server
+  // (needed for local dev CORS)
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+        ],
+      },
+    ];
+  },
+};
+
+export default nextConfig;
+```
+
+----------------------------------------------------------------
+TASK 2.3 — Create lib/lsp/monacoLSPSetup.ts (or .js)
+----------------------------------------------------------------
+
+This module initialises Monaco Language Client and connects it
+to your WebSocket LSP server. It is called from your editor page.
+
+Create file: lib/lsp/monacoLSPSetup.ts
+
+```typescript
+// lib/lsp/monacoLSPSetup.ts
+// This runs ONLY in the browser (called from a client component).
+
+import * as monaco from 'monaco-editor';
+import { MonacoLanguageClient } from 'monaco-languageclient';
+import { toSocket, WebSocketMessageReader, WebSocketMessageWriter } from 'vscode-ws-jsonrpc';
+import { CloseAction, ErrorAction, MessageTransports } from 'vscode-languageclient';
+
+// The language ID we register for J++ files.
+// Must match the languageId used when creating the Monaco model.
+export const JPP_LANGUAGE_ID = 'jpp';
+
+// LSP server WebSocket URL.
+// In dev: ws://localhost:3001
+// In prod: wss://your-lsp-server-url (set via env var)
+const LSP_WS_URL =
+  process.env.NEXT_PUBLIC_LSP_WS_URL || 'ws://localhost:3001';
+
+let client: MonacoLanguageClient | null = null;
+let websocket: WebSocket | null = null;
+
+/**
+ * Register the J++ language with Monaco (syntax, tokens, config).
+ * Call this once before creating any editor instances.
+ */
+export function registerJppLanguage(): void {
+  // Register language ID
+  monaco.languages.register({
+    id:         JPP_LANGUAGE_ID,
+    extensions: ['.jpp'],
+    aliases:    ['J++', 'jpp'],
+  });
+
+  // Basic syntax tokenizer (gives keyword/string/number colouring
+  // even before the LSP server responds)
+  monaco.languages.setMonarchTokensProvider(JPP_LANGUAGE_ID, {
+    keywords: ['ye', 'bol', 'agar', 'nahi', 'jabtak', 'tak', 'break', 'continue'],
+    multiKeywords: ['nahi agar', 'ke liye'],
+
+    tokenizer: {
+      root: [
+        // Multi-word keywords first
+        [/nahi agar/, 'keyword'],
+        [/ke liye/,   'keyword'],
+        // Single-word keywords
+        [/\b(ye|bol|agar|nahi|jabtak|tak|break|continue)\b/, 'keyword'],
+        // Strings
+        [/"([^"\\]|\\.)*"/, 'string'],
+        [/'([^'\\]|\\.)*'/, 'string'],
+        // Numbers
+        [/\b\d+\b/, 'number'],
+        // Comments
+        [/\/\/.*$/,  'comment'],
+        [/\/\*/, 'comment', '@comment'],
+        // Operators
+        [/[+\-*\/=<>!.]+/, 'operator'],
+        // Identifiers
+        [/[a-zA-Z_]\w*/, 'identifier'],
+      ],
+      comment: [
+        [/[^/*]+/, 'comment'],
+        [/\*\//,   'comment', '@pop'],
+        [/[/*]/,   'comment'],
+      ],
+    },
+  });
+
+  // Editor language configuration (brackets, comments, etc.)
+  monaco.languages.setLanguageConfiguration(JPP_LANGUAGE_ID, {
+    comments: {
+      lineComment:  '//',
+      blockComment: ['/*', '*/'],
+    },
+    brackets: [['{', '}'], ['(', ')']],
+    autoClosingPairs: [
+      { open: '{', close: '}' },
+      { open: '(', close: ')' },
+      { open: '"', close: '"', notIn: ['string'] },
+      { open: "'", close: "'", notIn: ['string'] },
+    ],
+    surroundingPairs: [
+      { open: '{', close: '}' },
+      { open: '(', close: ')' },
+      { open: '"', close: '"' },
+      { open: "'", close: "'" },
+    ],
+  });
+}
+
+/**
+ * Connect Monaco to the J++ LSP server over WebSocket.
+ * Call this once after the editor is mounted.
+ *
+ * Returns a cleanup function — call it when the editor unmounts.
+ */
+export function connectToLSP(documentUri: string): () => void {
+  // Prevent double-connecting
+  if (client) {
+    return () => {};
+  }
+
+  websocket = new WebSocket(LSP_WS_URL);
+
+  websocket.onopen = () => {
+    console.log('[J++ LSP] WebSocket connected to', LSP_WS_URL);
+
+    const socket   = toSocket(websocket!);
+    const reader   = new WebSocketMessageReader(socket);
+    const writer   = new WebSocketMessageWriter(socket);
+
+    const transports: MessageTransports = { reader, writer };
+
+    client = new MonacoLanguageClient({
+      name: 'J++ Language Client',
+      clientOptions: {
+        // Attach this client to J++ language files
+        documentSelector: [{ language: JPP_LANGUAGE_ID }],
+        // On error or close, try to reconnect after 3 seconds
+        errorHandler: {
+          error:  () => ({ action: ErrorAction.Continue }),
+          closed: () => ({ action: CloseAction.Restart }),
+        },
+        // The "workspace" root — use a virtual root for browser
+        workspaceFolder: {
+          uri:   monaco.Uri.parse('file:///workspace'),
+          name:  'J++ Workspace',
+          index: 0,
+        },
+      },
+      // Create transports from our WebSocket connection
+      messageTransports: transports,
+    });
+
+    client.start();
+    console.log('[J++ LSP] Language client started');
+  };
+
+  websocket.onerror = (err) => {
+    console.error('[J++ LSP] WebSocket error:', err);
+  };
+
+  websocket.onclose = () => {
+    console.log('[J++ LSP] WebSocket closed');
+    client = null;
+  };
+
+  // Return cleanup function for React useEffect
+  return () => {
+    if (client) {
+      client.stop();
+      client = null;
+    }
+    if (websocket) {
+      websocket.close();
+      websocket = null;
+    }
+  };
+}
+```
+
+----------------------------------------------------------------
+TASK 2.4 — Create the .env.local file
+----------------------------------------------------------------
+
+In the root of your repo, create .env.local:
+
+  # J++ LSP Server WebSocket URL
+  # Dev: ws://localhost:3001
+  # Prod: wss://your-deployed-lsp-url
+  NEXT_PUBLIC_LSP_WS_URL=ws://localhost:3001
+
+Add .env.local to .gitignore if not already there.
+Create .env.local.example (safe to commit):
+  NEXT_PUBLIC_LSP_WS_URL=ws://localhost:3001
+
+----------------------------------------------------------------
+TASK 2.5 — Modify your editor page (app/editor/page.tsx)
+----------------------------------------------------------------
+
+Your existing editor page needs these changes.
+Adapt the component name and existing code as needed.
+The critical parts are marked with CRITICAL comments.
+
+```tsx
+// app/editor/page.tsx
+'use client';  // CRITICAL: Must be a Client Component
+
+import { useEffect, useRef, useState } from 'react';
+import * as monaco from 'monaco-editor';
+
+// CRITICAL: Import our LSP setup functions
+import {
+  JPP_LANGUAGE_ID,
+  registerJppLanguage,
+  connectToLSP,
+} from '@/lib/lsp/monacoLSPSetup';
+
+// CRITICAL: Track whether language is registered (do it once globally)
+let languageRegistered = false;
+
+export default function EditorPage() {
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const editorRef          = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const [output, setOutput]   = useState<string>('');
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    if (!editorContainerRef.current) return;
+
+    // CRITICAL: Register J++ language with Monaco once
+    if (!languageRegistered) {
+      registerJppLanguage();
+      languageRegistered = true;
+    }
+
+    // CRITICAL: Create the Monaco editor with language: JPP_LANGUAGE_ID
+    const editor = monaco.editor.create(editorContainerRef.current, {
+      value: `// J++ — type your code here\nye greeting = "Hello"\nbol greeting`,
+      language:      JPP_LANGUAGE_ID,   // ← This is what links editor to LSP
+      theme:         'vs-dark',
+      fontSize:      14,
+      minimap:       { enabled: false },
+      automaticLayout: true,
+      scrollBeyondLastLine: false,
+    });
+
+    editorRef.current = editor;
+
+    // CRITICAL: Connect to LSP server
+    // The URI must be a valid file URI — used by LSP to track the document
+    const documentUri = 'file:///workspace/main.jpp';
+
+    // Create a Monaco model with the correct URI so LSP can track it
+    const model = monaco.editor.createModel(
+      editor.getValue(),
+      JPP_LANGUAGE_ID,
+      monaco.Uri.parse(documentUri)
+    );
+    editor.setModel(model);
+
+    // Connect to LSP — returns cleanup function
+    const cleanupLSP = connectToLSP(documentUri);
+
+    // Cleanup on unmount
+    return () => {
+      cleanupLSP();
+      editor.dispose();
+    };
+  }, []);
+
+  // Run button handler — calls Next.js API route
+  async function handleRun() {
+    if (!editorRef.current) return;
+    setRunning(true);
+    setOutput('');
+    try {
+      const source = editorRef.current.getValue();
+      const res = await fetch('/api/compile', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ source }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOutput(data.output || '(no output)');
+      } else {
+        setOutput(data.errors.map((e: any) => e.message).join('\n'));
+      }
+    } catch (e: any) {
+      setOutput('Error: ' + e.message);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      {/* Toolbar */}
+      <div style={{ padding: '8px 16px', background: '#1e1e1e', display: 'flex', gap: 8 }}>
+        <button onClick={handleRun} disabled={running}
+          style={{ padding: '6px 16px', background: '#007acc', color: '#fff',
+                   border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+          {running ? 'Running...' : '▶ Run'}
+        </button>
+        <span style={{ color: '#858585', fontSize: 13, alignSelf: 'center' }}>
+          J++ Editor — LSP connected
+        </span>
+      </div>
+
+      {/* Editor */}
+      <div ref={editorContainerRef}
+           style={{ flex: 1, minHeight: 0 }} />
+
+      {/* Output panel */}
+      <div style={{
+        height: 160, background: '#0e0e0e', color: '#d4d4d4',
+        padding: '8px 16px', fontFamily: 'monospace', fontSize: 13,
+        overflowY: 'auto', borderTop: '1px solid #333'
+      }}>
+        <div style={{ color: '#858585', marginBottom: 4 }}>Output</div>
+        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+          {output || ''}
+        </pre>
+      </div>
+    </div>
+  );
+}
+```
+
+----------------------------------------------------------------
+TASK 2.6 — Create app/api/compile/route.ts
+----------------------------------------------------------------
+
+This is the only Next.js API route we need — for the Run button.
+Everything else (diagnostics, hover, completion) goes through the
+WebSocket LSP server directly.
+
+```typescript
+// app/api/compile/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+
+// We import from lib/jpp which is plain CommonJS.
+// Next.js can import CommonJS from API routes fine.
+const { compileJPlusPlus } = require('@/lib/jpp/compiler');
+
+export async function POST(req: NextRequest) {
+  try {
+    const { source } = await req.json();
+
+    if (typeof source !== 'string') {
+      return NextResponse.json(
+        { success: false, errors: [{ message: 'source must be a string' }] },
+        { status: 400 }
+      );
+    }
+
+    const result = compileJPlusPlus(source);
+
+    if (!result.success) {
+      return NextResponse.json({
+        success: false,
+        output:  null,
+        errors:  result.errors,
+      });
+    }
+
+    // Execute the generated JS code and capture console.log output
+    const lines: string[] = [];
+    try {
+      // eslint-disable-next-line no-new-func
+      const fn = new Function('console', result.code);
+      fn({ log: (...args: unknown[]) => lines.push(args.join(' ')) });
+
+      return NextResponse.json({
+        success: true,
+        output:  lines.join('\n'),
+        errors:  [],
+      });
+    } catch (runtimeErr: any) {
+      return NextResponse.json({
+        success: false,
+        output:  null,
+        errors:  [{ message: runtimeErr.message, phase: 'runtime' }],
+      });
+    }
+  } catch (e: any) {
+    return NextResponse.json(
+      { success: false, errors: [{ message: e.message }] },
+      { status: 500 }
+    );
+  }
+}
+```
+
+----------------------------------------------------------------
+TASK 2.7 — Add dev scripts to root package.json
+----------------------------------------------------------------
+
+Add these scripts to your root package.json:
+
+```json
+{
+  "scripts": {
+    "dev": "concurrently \"next dev\" \"node lsp-server/server.js\"",
+    "dev:next": "next dev",
+    "dev:lsp":  "node lsp-server/server.js",
+    "build":    "next build",
+    "start":    "next start"
+  }
+}
+```
+
+Install concurrently:
+  npm install --save-dev concurrently
+
+Now `npm run dev` starts both Next.js on 3000 and LSP server on 3001.
+
+----------------------------------------------------------------
+TASK 2.8 — Verify Day 2
+----------------------------------------------------------------
+
+Run:  npm run dev
+
+Open browser at http://localhost:3000/editor
+
+Check browser console — you should see:
+  [J++ LSP] WebSocket connected to ws://localhost:3001
+  [J++ LSP] Language client started
+
+In the editor, type:
+  ye a = 5 . 5
+
+Wait 300ms — a red squiggle should appear under `. 5` with message
+". requires string operands"
+
+Hover over `ye` keyword — should show keyword documentation popup.
+
+Type a variable name, press Ctrl+Space — should show completions
+including keywords and the variable you declared.
+
+Click on a variable usage, press F12 — should jump to its declaration.
+
+If all four work, Day 2 is done.
+
+================================================================
+DAY 3 — DEPLOYMENT
+================================================================
+Goal by end of Day 3:
+- LSP server deployed (Railway recommended)
+- Next.js app deployed (Vercel recommended, or Railway)
+- Web editor talks to deployed LSP over wss://
+
+----------------------------------------------------------------
+TASK 3.1 — Deploy LSP server to Railway
+----------------------------------------------------------------
+
+The LSP server is a long-running WebSocket process. Vercel cannot
+host it. Railway can. Steps:
+
+1. Create a new Railway project at railway.app.
+
+2. In Railway, click "New Service" → "GitHub Repo" → select your repo.
+
+3. Under "Root Directory", set it to: lsp-server
+   (Railway will run npm start from that directory)
+
+4. Under "Environment Variables" in Railway, add:
+   LSP_PORT = 3001
+   (Railway may override this with its own PORT — handle both:)
+
+   In lsp-server/server.js, update the PORT line:
+   const PORT = process.env.PORT || process.env.LSP_PORT || 3001;
+
+5. Under "Networking" in Railway, expose the port:
+   Railway auto-detects it from your app. Make sure the PORT matches.
+
+6. Railway gives you a public URL like:
+   jpp-lsp-server-production.up.railway.app
+
+   Your WebSocket URL will be:
+   wss://jpp-lsp-server-production.up.railway.app
+
+   NOTE: Railway uses wss:// (secure WebSocket) automatically.
+   Your client MUST use wss:// not ws:// for the deployed version.
+
+----------------------------------------------------------------
+TASK 3.2 — Deploy Next.js app to Vercel (or Railway)
+----------------------------------------------------------------
+
+OPTION A — Vercel (easiest for Next.js):
+
+1. Push your repo to GitHub.
+2. Go to vercel.com → New Project → Import repo.
+3. Vercel auto-detects Next.js.
+4. Under "Environment Variables", add:
+   NEXT_PUBLIC_LSP_WS_URL = wss://jpp-lsp-server-production.up.railway.app
+5. Deploy.
+
+OPTION B — Railway (keep everything in one platform):
+
+1. In the same Railway project, add another service.
+2. Root directory: / (repo root, where Next.js lives)
+3. Build command: npm run build
+4. Start command: npm start (which runs next start)
+5. Add environment variable:
+   NEXT_PUBLIC_LSP_WS_URL = wss://your-lsp-service.railway.app
+6. Deploy.
+
+----------------------------------------------------------------
+TASK 3.3 — Handle WebSocket upgrade on Railway
+----------------------------------------------------------------
+
+Railway proxies WebSocket connections automatically if your server
+uses the standard ws library with a plain port listen.
+
+The lsp-server/server.js we wrote does exactly this:
+  const wss = new WebSocketServer({ port: PORT });
+
+This is correct. Railway will route WebSocket upgrade requests to
+your server transparently.
+
+No extra configuration needed.
+
+----------------------------------------------------------------
+TASK 3.4 — Update .env.local for local dev pointing at deployed server
+----------------------------------------------------------------
+
+If you want local Next.js to talk to the deployed LSP server
+(instead of running lsp-server locally):
+
+  NEXT_PUBLIC_LSP_WS_URL=wss://jpp-lsp-server-production.up.railway.app
+
+For local full-stack dev with both running locally:
+  NEXT_PUBLIC_LSP_WS_URL=ws://localhost:3001
+
+----------------------------------------------------------------
+TASK 3.5 — Verify deployment
+----------------------------------------------------------------
+
+1. Open your deployed Next.js URL in browser.
+2. Open browser DevTools → Network tab → filter by WS.
+3. You should see a WebSocket connection to your Railway URL.
+4. Click on it and watch messages — you should see initialize
+   request going out and capabilities response coming back.
+5. Type a J++ error in the editor — squiggle should appear.
+6. Check that hover and completion work.
+
+================================================================
+DAY 4 — POLISH + INTERVIEW PREP
+================================================================
+
+----------------------------------------------------------------
+TASK 4.1 — Add LSP connection status indicator to editor
+----------------------------------------------------------------
+
+Add this to your editor page component:
+
+```tsx
+const [lspStatus, setLspStatus] = useState<'connecting'|'connected'|'error'>('connecting');
+
+// In useEffect, pass a status callback to connectToLSP.
+// Modify connectToLSP in monacoLSPSetup.ts to accept onStatusChange:
+
+// In monacoLSPSetup.ts, update connectToLSP signature:
+// export function connectToLSP(
+//   documentUri: string,
+//   onStatusChange?: (status: 'connecting'|'connected'|'error') => void
+// ): () => void
+
+// Then in websocket.onopen: onStatusChange?.('connected')
+// In websocket.onerror:    onStatusChange?.('error')
+```
+
+In your toolbar JSX:
+```tsx
+<span style={{
+  color: lspStatus === 'connected' ? '#4ec9b0'
+       : lspStatus === 'error'     ? '#f44747'
+       : '#858585',
+  fontSize: 12
+}}>
+  ● {lspStatus === 'connected' ? 'LSP connected'
+   : lspStatus === 'error'     ? 'LSP error'
+   : 'Connecting...'}
+</span>
+```
+
+----------------------------------------------------------------
+TASK 4.2 — Handle Monaco SSR issue in Next.js
+----------------------------------------------------------------
+
+Monaco uses browser APIs (window, document) that crash during
+Next.js SSR. Your editor page already has 'use client' but
+you also need to make sure Monaco itself is not imported at
+module level in any server component.
+
+If you get "window is not defined" errors, wrap the editor
+component with dynamic import with ssr: false:
+
+Create app/editor/page.tsx as a thin wrapper:
+```tsx
+// app/editor/page.tsx
+import dynamic from 'next/dynamic';
+
+const EditorClient = dynamic(
+  () => import('./EditorClient'),
+  { ssr: false, loading: () => <div>Loading editor...</div> }
+);
+
+export default function EditorPage() {
+  return <EditorClient />;
+}
+```
+
+Move all your editor code to app/editor/EditorClient.tsx.
+That file keeps 'use client' at the top and all Monaco imports.
+
+----------------------------------------------------------------
+TASK 4.3 — Add keyboard shortcut for Run
+----------------------------------------------------------------
+
+In your editor useEffect, after creating the editor:
+
+```typescript
+editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+  handleRun();
+});
+```
+
+Ctrl+Enter (or Cmd+Enter on Mac) runs the code.
+
+----------------------------------------------------------------
+TASK 4.4 — Error list panel below editor
+----------------------------------------------------------------
+
+The squiggles are great but an error list panel makes it more
+visible in a demo. Add a third panel between editor and output:
+
+In your page, subscribe to Monaco's markers:
+
+```typescript
+// Inside useEffect, after editor is created:
+const markerDisposable = monaco.editor.onDidChangeMarkers((uris) => {
+  const markers = monaco.editor.getModelMarkers({ resource: model.uri });
+  setDiagnostics(markers.map(m => ({
+    message:  m.message,
+    line:     m.startLineNumber,
+    col:      m.startColumn,
+    severity: m.severity === 8 ? 'error' : 'warning',
+  })));
+});
+
+// Add to cleanup:
+// markerDisposable.dispose();
+```
+
+Add state:
+```typescript
+const [diagnostics, setDiagnostics] = useState<any[]>([]);
+```
+
+Add panel JSX:
+```tsx
+{diagnostics.length > 0 && (
+  <div style={{
+    maxHeight: 100, background: '#1e1e1e', overflowY: 'auto',
+    borderTop: '1px solid #333'
+  }}>
+    {diagnostics.map((d, i) => (
+      <div key={i} style={{
+        padding: '4px 16px', color: d.severity === 'error' ? '#f44747' : '#cca700',
+        fontSize: 12, fontFamily: 'monospace', cursor: 'pointer'
+      }}
+        onClick={() => {
+          editorRef.current?.revealLineInCenter(d.line);
+          editorRef.current?.setPosition({ lineNumber: d.line, column: d.col });
+          editorRef.current?.focus();
+        }}
+      >
+        ● Line {d.line}, Col {d.col}: {d.message}
+      </div>
+    ))}
+  </div>
+)}
+```
+
+Clicking an error item jumps the editor to that line.
+
+================================================================
+ENVIRONMENT VARIABLES — COMPLETE REFERENCE
+================================================================
+
+Local development (.env.local):
+  NEXT_PUBLIC_LSP_WS_URL=ws://localhost:3001
+
+Production Vercel env vars:
+  NEXT_PUBLIC_LSP_WS_URL=wss://your-railway-lsp-url.railway.app
+
+Production Railway (LSP server) env vars:
+  PORT=3001   (Railway sets this automatically)
+
+================================================================
+FINAL VERIFICATION CHECKLIST
+================================================================
+
+LSP SERVER (lsp-server/):
+  [ ] node lsp-server/server.js starts without errors
+  [ ] wscat connects to ws://localhost:3001
+  [ ] initialize → capabilities response received
+  [ ] didOpen with error → publishDiagnostics with error received
+  [ ] didOpen with valid code → publishDiagnostics with [] received
+  [ ] hover request → content returned for known variable
+  [ ] completion request → items array returned
+  [ ] definition request → location returned for declared variable
+
+NEXT.JS APP:
+  [ ] npm run dev starts both processes
+  [ ] Browser console shows "[J++ LSP] WebSocket connected"
+  [ ] Browser console shows "[J++ LSP] Language client started"
+  [ ] Monaco editor loads with J++ syntax highlighting
+  [ ] Type error → squiggle appears within 300ms
+  [ ] Fix error → squiggle disappears
+  [ ] Hover over variable → type popup shows
+  [ ] Hover over keyword (ye, bol) → docs popup shows
+  [ ] Ctrl+Space → completion list appears
+  [ ] F12 on variable → jumps to declaration line
+  [ ] Ctrl+Enter → runs code, output appears
+  [ ] Run button with error → error shown in output panel
+  [ ] Error list panel shows errors, clicking jumps to line
+
+DEPLOYMENT:
+  [ ] LSP server deployed to Railway, accessible at wss://...
+  [ ] Next.js deployed to Vercel with NEXT_PUBLIC_LSP_WS_URL set
+  [ ] Deployed web editor shows "[J++ LSP] WebSocket connected" in console
+  [ ] Squiggles work on deployed URL
+  [ ] No CORS errors in browser console
+
+================================================================
+INTERVIEW TALKING POINTS
+================================================================
+
+ON ARCHITECTURE:
+"The LSP server is a standalone Node.js WebSocket process that reuses
+the same compiler pipeline — lexer, parser, type checker — from lib/jpp.
+The Next.js app is the only client. They talk real JSON-RPC 2.0 over
+WebSocket. The browser runs Monaco Language Client which speaks the
+LSP protocol natively. No HTTP polling, no custom protocol — actual LSP."
+
+ON WHY NOT NEXT.JS API ROUTES FOR LSP:
+"LSP requires a persistent bidirectional WebSocket connection. Next.js
+Route Handlers are stateless HTTP handlers — they can't maintain
+connection state between requests. The server needs to remember which
+documents are open and debounce diagnostics per document. So we run
+the LSP server as a separate process."
+
+ON POSITION TRACKING:
+"The biggest compiler change was adding line and column to every token.
+The original compiler had no position info — errors had messages but no
+location. LSP requires exact positions for squiggle placement. The
+advance() function in the lexer tracks this as it reads characters.
+That change was the foundation for every other feature."
+
+ON 0-INDEXED vs 1-INDEXED:
+"LSP uses 0-indexed line and character positions. Our compiler is
+1-indexed since that's what humans expect in error messages. We
+convert at the transport boundary — the server subtracts 1 when
+sending to the client, and adds 1 when receiving cursor positions.
+The compiler itself never sees 0-indexed values."
+
+ON PARTIAL RESULTS:
+"If the file has a type error, the type checker throws after the AST
+is already built. We catch that error, record it, and still return
+the tokens and AST from the earlier phases. This means hover and
+completion still work even when the file has errors — which is almost
+always during active editing."
+
+WHAT TO DEMO (90 seconds):
+1. Open the deployed web editor
+2. Point to the status bar — "LSP connected" indicator
+3. Type: ye a = 5 . 5
+4. Red squiggle appears. Hover it — "type mismatch, . requires strings"
+5. Fix: ye a = "hello" . " world" — squiggle disappears
+6. Hover over 'a' — shows type: string, declared at line 1
+7. Hover over 'bol' keyword — shows keyword docs
+8. Press Ctrl+Space — completion list with keywords + variable 'a'
+9. Add: ye b = a on line 2. F12 on 'a' — jumps to line 1
+10. Click Run — output shows: hello world
+11. Open DevTools Network → WS — show JSON-RPC messages live
+
+================================================================
+END OF PLAN
+================================================================

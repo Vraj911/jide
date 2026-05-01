@@ -1,17 +1,17 @@
-const { createRequire } = require("node:module");
-const vm = require("node:vm");
 const { Worker } = require("node:worker_threads");
-
-const requireFromHere = createRequire(__filename);
 let compileJPlusPlus = null;
 const MAX_SOURCE_CHARS = 20_000;
 const EXECUTION_TIMEOUT_MS = 750;
 const WORKER_MEMORY_MB = 32;
 
 try {
-  compileJPlusPlus = requireFromHere("../../../lib/jpp/compiler.js");
+  compileJPlusPlus = require("../../../lib/jpp/compiler.js");
 } catch {
-  compileJPlusPlus = null;
+  try {
+    compileJPlusPlus = require("../../../../lib/jpp/compiler.js");
+  } catch {
+    compileJPlusPlus = null;
+  }
 }
 
 function executeCompiledJavaScript(jsCode) {

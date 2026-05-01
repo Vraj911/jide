@@ -38,6 +38,8 @@ export default function IDE() {
   const [compiledCode, setCompiledCode] = useState("");
   const [output, setOutput] = useState("");
   const [errors, setErrors] = useState([]);
+  const [lspStatus, setLspStatus] = useState("connecting");
+  const [diagnostics, setDiagnostics] = useState([]);
   const [isCompiling, setIsCompiling] = useState(false);
   const [settings, setSettings] = useState({
     theme: "dark",
@@ -129,6 +131,19 @@ export default function IDE() {
             <Play className="h-4 w-4 mr-2" />
             {isCompiling ? "Compiling..." : "Compile & Run"}
           </Button>
+          <span
+            className="text-xs"
+            style={{
+              color:
+                lspStatus === "connected"
+                  ? "#4ec9b0"
+                  : lspStatus === "error"
+                    ? "#f44747"
+                    : "#858585",
+            }}
+          >
+            ● {lspStatus === "connected" ? "LSP connected" : lspStatus === "error" ? "LSP error" : "Connecting..."}
+          </span>
           <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)}>
             <SettingsIcon className="h-4 w-4" />
           </Button>
@@ -151,6 +166,8 @@ export default function IDE() {
                   fontSize={settings.fontSize}
                   wordWrap={settings.wordWrap ? "on" : "off"}
                   minimap={settings.minimap}
+                  onLspStatusChange={setLspStatus}
+                  onDiagnosticsChange={setDiagnostics}
                 />
               </div>
             </div>
@@ -208,10 +225,10 @@ export default function IDE() {
                   <Panel defaultSize={settings.showCompiled ? 34 : 50} minSize={15}>
                     <div className="h-full flex flex-col bg-panel-bg">
                       <div className="h-10 border-b border-panel-border px-4 flex items-center gap-2 text-sm font-medium text-editor-fg">
-                        {errors.length > 0 ? (
+                        {diagnostics.length + errors.length > 0 ? (
                           <>
                             <AlertCircle className="h-4 w-4 text-destructive" />
-                            <span>Problems ({errors.length})</span>
+                            <span>Problems ({diagnostics.length + errors.length})</span>
                           </>
                         ) : (
                           <>
@@ -221,10 +238,23 @@ export default function IDE() {
                         )}
                       </div>
                       <div className="flex-1 overflow-auto">
-                        {errors.length === 0 ? (
+                        {diagnostics.length === 0 && errors.length === 0 ? (
                           <div className="p-4 text-sm text-muted-foreground">No problems detected.</div>
                         ) : (
                           <div className="divide-y divide-border/50">
+                            {diagnostics.map((diag, index) => (
+                              <div key={`diag-${index}`} className="p-4 hover:bg-card/50 transition-colors">
+                                <div className="flex items-start gap-3">
+                                  <AlertCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-destructive">{diag.message}</div>
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      Line {diag.line}, Col {diag.col}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
                             {errors.map((error, index) => (
                               <div key={index} className="p-4 hover:bg-card/50 cursor-pointer transition-colors">
                                 <div className="flex items-start gap-3">

@@ -71,9 +71,30 @@ export default function Docs() {
             </p>
           </Card>
           <Card className="p-6">
+            <h2 className="text-2xl font-semibold mb-3">Type system and operators</h2>
+            <p className="text-muted-foreground">
+              J++ infers primitive types from literals and keeps variable types stable after first assignment. `+` is numeric-only and `.`
+              is string-concatenation-only to avoid JavaScript-style mixed-type ambiguity.
+            </p>
+          </Card>
+          <Card className="p-6">
             <h2 className="text-2xl font-semibold mb-3">Compilation pipeline</h2>
             <p className="text-muted-foreground">
               Source code is tokenized, parsed into an AST, type-checked, converted to JavaScript, and then executed on the server.
+            </p>
+          </Card>
+          <Card className="p-6">
+            <h2 className="text-2xl font-semibold mb-3">Compiler architecture</h2>
+            <p className="text-muted-foreground">
+              The compiler is split into `lexer`, `parser`, `typeChecker`, and `generator` modules under `lib/jpp`, coordinated by
+              `compiler.js`. This separation keeps language evolution easier and safer.
+            </p>
+          </Card>
+          <Card className="p-6">
+            <h2 className="text-2xl font-semibold mb-3">Execution model and safety</h2>
+            <p className="text-muted-foreground">
+              Compiled JavaScript runs in a constrained worker-thread + VM sandbox with timeout and memory ceilings. It is solid for demos
+              and controlled workloads, but not equivalent to full container isolation for hostile multi-tenant workloads.
             </p>
           </Card>
           <Card className="p-6">
@@ -81,6 +102,19 @@ export default function Docs() {
             <p className="text-muted-foreground">
               Use `/ide` to compile and run J++ code through `/api/execute`. Compiler output and execution logs are shown in separate panels.
             </p>
+          </Card>
+          <Card className="p-6">
+            <h2 className="text-2xl font-semibold mb-3">Quick syntax examples</h2>
+            <pre className="text-sm text-muted-foreground whitespace-pre-wrap">
+{`ye a = 5
+ye b = 10
+ye total = a + b
+bol total
+
+ye first = "hello"
+ye second = "world"
+bol first . second`}
+            </pre>
           </Card>
         </div>
       </main>

@@ -1,14 +1,44 @@
 const { createHash, randomBytes, scryptSync, timingSafeEqual } = require("node:crypto");
-const fs = require("node:fs/promises");
-const path = require("node:path");
+const { MongoClient } = require("mongodb");
 
-const STORE_DIR = path.join(process.cwd(), "data");
-const STORE_FILE = path.join(STORE_DIR, "auth-store.json");
 const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-const STORE_VERSION = 2;
 
-let mutationQueue = Promise.resolve();
+const MONGO_URI = process.env.MONGO_URI;
+const MONGO_DB = process.env.MONGO_DB || "jide";
+
+let indexInitPromise = null;
+
+function getClient() {
+  if (!MONGO_URI) {
+    throw new Error("MONGO_URI is not configured.");
+  }
+
+  if (!globalThis.__jideMongoClientPromise) {
+    const client = new MongoClient(MONGO_URI);
+    globalThis.__jideMongoClientPromise = client.connect();
+  }
+
+  return globalThis.__jideMongoClientPromise;
+}
+
+async function getDb() {
+  const client = await getClient();
+  return client.db(MONGO_DB);
+}
+
+async function ensureIndexes() {
+  if (!indexInitPromise) {
+    indexInitPromise = (async () => {
+      const db = await getDb();
+      await db.collection("users").createIndex({ email: 1 }, { unique: true });
+      await db.collection("sessions").createIndex({ token: 1 }, { unique: true });
+      await db.collection("sessions").createIndex({ expiresAt: 1 });
+    })();
+  }
+
+  return indexInitPromise;
+}
 
 function hashPassword(password, salt = randomBytes(16).toString("hex")) {
   const digest = scryptSync(password, salt, 64).toString("hex");
@@ -16,7 +46,7 @@ function hashPassword(password, salt = randomBytes(16).toString("hex")) {
 }
 
 function verifyPassword(password, storedHash) {
-  const [salt, digest] = String(storedHash).split(":");
+  const [salt, digest] = String(storedHash || "").split(":");
   if (!salt || !digest) return false;
   const expected = Buffer.from(digest, "hex");
   const actual = Buffer.from(scryptSync(password, salt, 64).toString("hex"), "hex");
@@ -24,59 +54,21 @@ function verifyPassword(password, storedHash) {
   return timingSafeEqual(expected, actual);
 }
 
-async function ensureStore() {
-  await fs.mkdir(STORE_DIR, { recursive: true });
-  try {
-    await fs.access(STORE_FILE);
-  } catch {
-    await fs.writeFile(
-      STORE_FILE,
-      JSON.stringify({ version: STORE_VERSION, users: [], sessions: [], auditLog: [] }, null, 2),
-      "utf8",
-    );
-  }
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
 }
 
-async function readStore() {
-  await ensureStore();
-  let raw = await fs.readFile(STORE_FILE, "utf8");
-  if (!raw.trim()) {
-    raw = '{"users":[],"sessions":[]}';
-  }
-  const parsed = JSON.parse(raw);
-  return {
-    version: Number.isFinite(parsed.version) ? parsed.version : STORE_VERSION,
-    users: Array.isArray(parsed.users) ? parsed.users : [],
-    sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
-    auditLog: Array.isArray(parsed.auditLog) ? parsed.auditLog : [],
-  };
-}
-
-async function writeStore(store) {
-  const tempFile = `${STORE_FILE}.tmp`;
-  await fs.writeFile(tempFile, JSON.stringify(store, null, 2), "utf8");
-  await fs.rename(tempFile, STORE_FILE);
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function sanitizeUser(user) {
   return {
-    id: user.id,
+    id: String(user._id),
     email: user.email,
-    role: user.role || "USER",
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt || null,
   };
-}
-
-function withMutation(fn) {
-  const run = mutationQueue.then(async () => {
-    const store = await readStore();
-    const result = await fn(store);
-    await writeStore(store);
-    return result;
-  });
-  mutationQueue = run.catch(() => undefined);
-  return run;
 }
 
 function createClientFingerprint(context = {}) {
@@ -84,120 +76,136 @@ function createClientFingerprint(context = {}) {
   return createHash("sha256").update(raw).digest("hex");
 }
 
-function appendAuditLog(store, action, context = {}) {
-  store.auditLog.push({
-    action,
-    timestamp: new Date().toISOString(),
-    email: context.email || null,
-    userId: context.userId || null,
-    ip: context.ip || null,
-  });
+async function createUser(email, password) {
+  await ensureIndexes();
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedPassword = String(password || "");
 
-  if (store.auditLog.length > 500) {
-    store.auditLog = store.auditLog.slice(store.auditLog.length - 500);
+  if (!normalizedEmail || !normalizedPassword) {
+    throw new Error("Email and password are required.");
+  }
+  if (!isValidEmail(normalizedEmail)) {
+    throw new Error("Please provide a valid email address.");
+  }
+  if (normalizedPassword.length < 6) {
+    throw new Error("Password must be at least 6 characters.");
+  }
+
+  const now = new Date().toISOString();
+  const userDoc = {
+    email: normalizedEmail,
+    passwordHash: hashPassword(normalizedPassword),
+    createdAt: now,
+    lastLoginAt: null,
+  };
+
+  const db = await getDb();
+  try {
+    const result = await db.collection("users").insertOne(userDoc);
+    return sanitizeUser({ ...userDoc, _id: result.insertedId });
+  } catch (error) {
+    if (error && error.code === 11000) {
+      throw new Error("Email already registered.");
+    }
+    throw error;
   }
 }
 
-async function createUser(email, password, context = {}) {
-  const normalizedEmail = String(email || "").trim().toLowerCase();
-  const normalizedPassword = String(password || "");
-  if (!normalizedEmail || !normalizedPassword) throw new Error("Email and password are required.");
-  if (normalizedPassword.length < 6) throw new Error("Password must be at least 6 characters.");
-
-  return withMutation(async (store) => {
-    if (store.users.some((u) => u.email === normalizedEmail)) throw new Error("Email already registered.");
-
-    const user = {
-      id: randomBytes(12).toString("hex"),
-      email: normalizedEmail,
-      role: store.users.length === 0 ? "ADMIN" : "USER",
-      passwordHash: hashPassword(normalizedPassword),
-      createdAt: new Date().toISOString(),
-      lastLoginAt: null,
-    };
-    store.users.push(user);
-    appendAuditLog(store, "SIGNUP", { email: normalizedEmail, userId: user.id, ip: context.ip });
-    return sanitizeUser(user);
-  });
-}
-
 async function loginUser(email, password, context = {}) {
-  const normalizedEmail = String(email || "").trim().toLowerCase();
+  await ensureIndexes();
+  const normalizedEmail = normalizeEmail(email);
   const normalizedPassword = String(password || "");
 
-  return withMutation(async (store) => {
-    const user = store.users.find((u) => u.email === normalizedEmail);
-    if (!user || !verifyPassword(normalizedPassword, user.passwordHash)) {
-      appendAuditLog(store, "LOGIN_FAILED", { email: normalizedEmail, ip: context.ip });
-      throw new Error("Invalid credentials.");
-    }
+  if (!normalizedEmail || !normalizedPassword) {
+    throw new Error("Email and password are required.");
+  }
 
-    const token = randomBytes(24).toString("hex");
-    const now = Date.now();
-    const fingerprint = createClientFingerprint(context);
+  const db = await getDb();
+  const user = await db.collection("users").findOne({ email: normalizedEmail });
 
-    store.sessions = store.sessions.filter((s) => Number(s.expiresAt) > now);
-    user.lastLoginAt = new Date(now).toISOString();
-    store.sessions.push({
-      token,
-      userId: user.id,
-      createdAt: now,
-      updatedAt: now,
-      expiresAt: now + SESSION_MAX_AGE_MS,
-      idleExpiresAt: now + SESSION_IDLE_TIMEOUT_MS,
-      fingerprint,
-    });
-    appendAuditLog(store, "LOGIN_SUCCESS", { email: normalizedEmail, userId: user.id, ip: context.ip });
-    return { user: sanitizeUser(user), token };
+  if (!user || !verifyPassword(normalizedPassword, user.passwordHash)) {
+    throw new Error("Invalid credentials.");
+  }
+
+  const now = Date.now();
+  const token = randomBytes(24).toString("hex");
+  const fingerprint = createClientFingerprint(context);
+
+  await db.collection("sessions").deleteMany({
+    $or: [{ expiresAt: { $lte: now } }, { idleExpiresAt: { $lte: now } }],
   });
+
+  await db.collection("users").updateOne(
+    { _id: user._id },
+    { $set: { lastLoginAt: new Date(now).toISOString() } },
+  );
+
+  await db.collection("sessions").insertOne({
+    token,
+    userId: user._id,
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: now + SESSION_MAX_AGE_MS,
+    idleExpiresAt: now + SESSION_IDLE_TIMEOUT_MS,
+    fingerprint,
+  });
+
+  return {
+    user: sanitizeUser({ ...user, lastLoginAt: new Date(now).toISOString() }),
+    token,
+  };
 }
 
 async function getSessionUser(token, context = {}) {
   if (!token) return null;
-  const store = await readStore();
+
+  await ensureIndexes();
+  const db = await getDb();
   const now = Date.now();
   const expectedFingerprint = createClientFingerprint(context);
-  const session = store.sessions.find(
-    (s) =>
-      s.token === token &&
-      Number(s.expiresAt) > now &&
-      Number(s.idleExpiresAt || 0) > now &&
-      s.fingerprint === expectedFingerprint,
-  );
+
+  const session = await db.collection("sessions").findOne({ token });
   if (!session) return null;
-  const user = store.users.find((u) => u.id === session.userId);
+  if (Number(session.expiresAt) <= now || Number(session.idleExpiresAt) <= now) {
+    await db.collection("sessions").deleteOne({ _id: session._id });
+    return null;
+  }
+  if (session.fingerprint !== expectedFingerprint) {
+    return null;
+  }
+
+  const user = await db.collection("users").findOne({ _id: session.userId });
   return user ? sanitizeUser(user) : null;
 }
 
 async function touchSession(token) {
   if (!token) return;
-  await withMutation(async (store) => {
-    const session = store.sessions.find((s) => s.token === token);
-    if (!session) return;
-    const now = Date.now();
-    session.updatedAt = now;
-    session.idleExpiresAt = now + SESSION_IDLE_TIMEOUT_MS;
-  });
+  await ensureIndexes();
+  const db = await getDb();
+  const now = Date.now();
+  await db.collection("sessions").updateOne(
+    { token },
+    {
+      $set: {
+        updatedAt: now,
+        idleExpiresAt: now + SESSION_IDLE_TIMEOUT_MS,
+      },
+    },
+  );
 }
 
-async function deleteSession(token, context = {}) {
+async function deleteSession(token) {
   if (!token) return;
-  await withMutation(async (store) => {
-    const existing = store.sessions.find((s) => s.token === token);
-    store.sessions = store.sessions.filter((s) => s.token !== token);
-    if (existing) {
-      appendAuditLog(store, "LOGOUT", { userId: existing.userId, ip: context.ip });
-    }
-  });
+  await ensureIndexes();
+  const db = await getDb();
+  await db.collection("sessions").deleteOne({ token });
 }
 
 async function resetStoreData() {
-  await withMutation(async (store) => {
-    store.version = STORE_VERSION;
-    store.users = [];
-    store.sessions = [];
-    store.auditLog = [];
-  });
+  await ensureIndexes();
+  const db = await getDb();
+  await db.collection("sessions").deleteMany({});
+  await db.collection("users").deleteMany({});
 }
 
 module.exports = {

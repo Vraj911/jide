@@ -64,6 +64,8 @@ async function findRepoRoot(startDir) {
 async function collectMarkdownFiles(rootDir) {
   const candidates = [
     path.join(rootDir, "JPP_README.md"),
+    path.join(rootDir, "README.md"),
+    path.join(rootDir, "rag.md"),
     path.join(rootDir, "jpp.md"),
   ];
   const files = [];
@@ -264,14 +266,20 @@ async function buildLLMAnswer(query, chunks) {
   const context = buildContext(chunks);
   const sources = [...new Set(chunks.map(c => c.source))];
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  const baseUrl = process.env.OPENAI_BASE_URL;
+  const apiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
+  const baseUrl = process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1";
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-  if (!apiKey || !context) {
+  if (!context) {
     return {
       answer: "I cannot find the answer in the provided documentation.",
       sources: [],
+    };
+  }
+  if (!apiKey) {
+    return {
+      answer: chunks[0]?.text?.slice(0, 600) || "I cannot find the answer in the provided documentation.",
+      sources,
     };
   }
 
@@ -320,8 +328,8 @@ Rules:
     });
   } catch {
     return {
-      answer: "I cannot find the answer in the provided documentation.",
-      sources: [],
+      answer: chunks[0]?.text?.slice(0, 600) || "I cannot find the answer in the provided documentation.",
+      sources,
     };
   }
 
@@ -332,8 +340,8 @@ Rules:
     return JSON.parse(text);
   } catch {
     return {
-      answer: "I cannot find the answer in the provided documentation.",
-      sources: [],
+      answer: chunks[0]?.text?.slice(0, 600) || "I cannot find the answer in the provided documentation.",
+      sources,
     };
   }
 }
