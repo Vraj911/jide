@@ -1,13 +1,16 @@
 "use client";
 import { useEffect, useRef } from "react";
-import MonacoEditor from "@monaco-editor/react";
+import dynamic from "next/dynamic";
 import {
   jppLanguageConfig,
   jppMonarchTokens,
   jppTheme,
   jppLightTheme
 } from "@/lib/monacoConfig";
-import { connectToLSP, JPP_LANGUAGE_ID, registerJppLanguage } from "@/lib/lsp/monacoLSPSetup";
+
+const JPP_LANGUAGE_ID = "jpp";
+
+const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
 let themesRegistered = false;
 
@@ -30,11 +33,10 @@ export function Editor({
   const lspConnectedRef = useRef(false);
   const lspDocumentUriRef = useRef("file:///workspace/main.jpp");
 
-  const handleEditorDidMount = (editor, monaco) => {
+  const handleEditorDidMount = async (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    registerJppLanguage();
     if (!monaco.languages.getLanguages().some(lang => lang.id === "jpp")) {
       monaco.languages.register(jppLanguageConfig);
       monaco.languages.setMonarchTokensProvider("jpp", jppMonarchTokens);
@@ -49,6 +51,18 @@ export function Editor({
     monaco.editor.setTheme(theme === "dark" ? "jpp-dark" : "jpp-light");
 
     if (!readOnly && language === JPP_LANGUAGE_ID && !lspConnectedRef.current) {
+      // Load the LSP wiring only for the primary editable J++ editor.
+      // This avoids pulling the heavy LSP/VSCode API shim into every editor instance
+      // (e.g. read-only compiled JS panes), and lets Next.js compile it lazily.
+      let connectToLSP;
+      try {
+        ({ connectToLSP } = await import("@/lib/lsp/monacoLSPSetup"));
+      } catch (error) {
+        console.error("[J++ LSP] Failed to load LSP setup:", error);
+        onLspStatusChange?.("error");
+        return;
+      }
+
       const model = editor.getModel();
       if (model && model.uri.toString() !== lspDocumentUriRef.current) {
         const replacementModel = monaco.editor.createModel(
@@ -60,8 +74,20 @@ export function Editor({
         model.dispose();
       }
 
-      lspCleanupRef.current = connectToLSP(lspDocumentUriRef.current, onLspStatusChange);
-      lspConnectedRef.current = true;
+      // Defer the connection slightly so IDE UI shows up fast in dev.
+      setTimeout(async () => {
+        try {
+          lspCleanupRef.current = await connectToLSP(
+            lspDocumentUriRef.current,
+            onLspStatusChange,
+            monaco
+          );
+          lspConnectedRef.current = true;
+        } catch (error) {
+          console.error("[J++ LSP] Failed to connect:", error);
+          onLspStatusChange?.("error");
+        }
+      }, 0);
 
       markerDisposableRef.current = monaco.editor.onDidChangeMarkers(() => {
         const activeModel = editor.getModel();
