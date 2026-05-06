@@ -28,3 +28,4 @@ dist-ssr
 # Local auth/session data
 data/
 
+.env
