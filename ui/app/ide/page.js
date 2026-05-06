@@ -115,6 +115,7 @@ export default function IDE() {
     }
   };
 
+
   if (!mounted) {
     return null;
   }

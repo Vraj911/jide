@@ -64,9 +64,7 @@ async function findRepoRoot(startDir) {
 async function collectMarkdownFiles(rootDir) {
   const candidates = [
     path.join(rootDir, "JPP_README.md"),
-    path.join(rootDir, "README.md"),
     path.join(rootDir, "rag.md"),
-    path.join(rootDir, "jpp.md"),
   ];
   const files = [];
   for (const file of candidates) {
