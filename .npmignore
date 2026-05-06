@@ -1,5 +1,4 @@
 # Docs not needed in npm package
-DOCKER.md
 
 # Any other non-runtime artifacts
 **/*.md

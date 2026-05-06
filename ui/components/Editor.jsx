@@ -10,6 +10,8 @@ import {
 
 const JPP_LANGUAGE_ID = "jpp";
 
+const ENABLE_LSP = process.env.NEXT_PUBLIC_ENABLE_LSP === "true";
+
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
 let themesRegistered = false;
@@ -31,6 +33,7 @@ export function Editor({
   const lspCleanupRef = useRef(null);
   const markerDisposableRef = useRef(null);
   const lspConnectedRef = useRef(false);
+  const lspLanguageRegisteredRef = useRef(false);
   const lspDocumentUriRef = useRef("file:///workspace/main.jpp");
 
   const handleEditorDidMount = async (editor, monaco) => {
@@ -51,54 +54,60 @@ export function Editor({
     monaco.editor.setTheme(theme === "dark" ? "jpp-dark" : "jpp-light");
 
     if (!readOnly && language === JPP_LANGUAGE_ID && !lspConnectedRef.current) {
+      if (!ENABLE_LSP) {
+        onLspStatusChange?.("disabled");
+        return;
+      }
+
       // Load the LSP wiring only for the primary editable J++ editor.
       // This avoids pulling the heavy LSP/VSCode API shim into every editor instance
       // (e.g. read-only compiled JS panes), and lets Next.js compile it lazily.
+      let registerJppLanguage;
       let connectToLSP;
       try {
-        ({ connectToLSP } = await import("@/lib/lsp/monacoLSPSetup"));
+        ({ registerJppLanguage, connectToLSP } = await import("@/lib/lsp/monacoLSPSetup"));
       } catch (error) {
         console.error("[J++ LSP] Failed to load LSP setup:", error);
         onLspStatusChange?.("error");
         return;
       }
 
-      const model = editor.getModel();
-      if (model && model.uri.toString() !== lspDocumentUriRef.current) {
-        const replacementModel = monaco.editor.createModel(
-          model.getValue(),
-          JPP_LANGUAGE_ID,
-          monaco.Uri.parse(lspDocumentUriRef.current)
-        );
-        editor.setModel(replacementModel);
-        model.dispose();
+      if (!lspLanguageRegisteredRef.current) {
+        registerJppLanguage(monaco);
+        lspLanguageRegisteredRef.current = true;
       }
 
-      // Defer the connection slightly so IDE UI shows up fast in dev.
-      setTimeout(async () => {
-        try {
-          lspCleanupRef.current = await connectToLSP(
-            lspDocumentUriRef.current,
-            onLspStatusChange,
-            monaco
-          );
-          lspConnectedRef.current = true;
-        } catch (error) {
-          console.error("[J++ LSP] Failed to connect:", error);
-          onLspStatusChange?.("error");
-        }
-      }, 0);
+      const previousModel = editor.getModel();
+      const modelUri = monaco.Uri.parse("file:///workspace/main.jpp");
+      let model = monaco.editor.getModel(modelUri);
+
+      if (!model) {
+        model = monaco.editor.createModel(editor.getValue(), "jpp", modelUri);
+      }
+
+      editor.setModel(model);
+
+      if (previousModel && previousModel !== model) {
+        previousModel.dispose();
+      }
+
+      try {
+        lspCleanupRef.current = connectToLSP(monaco, model, onLspStatusChange);
+        lspConnectedRef.current = true;
+      } catch (error) {
+        console.error("[J++ LSP] Failed to connect:", error);
+        onLspStatusChange?.("error");
+      }
 
       markerDisposableRef.current = monaco.editor.onDidChangeMarkers(() => {
-        const activeModel = editor.getModel();
-        if (!activeModel || !onDiagnosticsChange) return;
-        const markers = monaco.editor.getModelMarkers({ resource: activeModel.uri });
-        onDiagnosticsChange(
+        const markers = monaco.editor.getModelMarkers({ resource: model.uri });
+        onDiagnosticsChange?.(
           markers.map((m) => ({
             message: m.message,
             line: m.startLineNumber,
             col: m.startColumn,
-            severity: m.severity === 8 ? "error" : "warning"
+            severity:
+              m.severity === monaco.MarkerSeverity.Error ? "error" : "warning",
           }))
         );
       });

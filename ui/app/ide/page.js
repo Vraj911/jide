@@ -30,6 +30,8 @@ jabtak x < 15 {
   x = x + 1
 }`;
 
+const ENABLE_LSP = process.env.NEXT_PUBLIC_ENABLE_LSP === "true";
+
 export default function IDE() {
   const { theme: appTheme, setTheme: setAppTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -38,7 +40,7 @@ export default function IDE() {
   const [compiledCode, setCompiledCode] = useState("");
   const [output, setOutput] = useState("");
   const [errors, setErrors] = useState([]);
-  const [lspStatus, setLspStatus] = useState("connecting");
+  const [lspStatus, setLspStatus] = useState(ENABLE_LSP ? "connecting" : "disabled");
   const [diagnostics, setDiagnostics] = useState([]);
   const [isCompiling, setIsCompiling] = useState(false);
   const [settings, setSettings] = useState({
@@ -139,10 +141,12 @@ export default function IDE() {
                   ? "#4ec9b0"
                   : lspStatus === "error"
                     ? "#f44747"
+                    : lspStatus === "disabled"
+                      ? "#858585"
                     : "#858585",
             }}
           >
-            ● {lspStatus === "connected" ? "LSP connected" : lspStatus === "error" ? "LSP error" : "Connecting..."}
+            ● {lspStatus === "connected" ? "LSP connected" : lspStatus === "error" ? "LSP error" : lspStatus === "disabled" ? "LSP disabled" : "Connecting..."}
           </span>
           <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)}>
             <SettingsIcon className="h-4 w-4" />

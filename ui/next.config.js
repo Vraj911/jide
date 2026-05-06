@@ -6,9 +6,7 @@ const nextConfig = {
     if (isServer) {
       config.externals = [
         ...(config.externals || []),
-        "monaco-editor",
-        "monaco-languageclient",
-        "vscode-languageclient",
+        'monaco-editor',
       ];
     }
     return config;

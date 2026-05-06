@@ -1,17 +1,40 @@
 const { Worker } = require("node:worker_threads");
+const path = require("node:path");
+const fs = require("node:fs");
 let compileJPlusPlus = null;
 const MAX_SOURCE_CHARS = 20_000;
 const EXECUTION_TIMEOUT_MS = 750;
 const WORKER_MEMORY_MB = 32;
 
-try {
-  compileJPlusPlus = require("../../../lib/jpp/compiler.js");
-} catch {
-  try {
-    compileJPlusPlus = require("../../../../lib/jpp/compiler.js");
-  } catch {
-    compileJPlusPlus = null;
+function findUpForCompiler(startDir) {
+  let dir = startDir;
+  for (let i = 0; i < 12; i++) {
+    const candidate = path.join(dir, "lib", "jpp", "compiler.js");
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
   }
+  return null;
+}
+
+const compilerPath =
+  findUpForCompiler(process.cwd()) ||
+  findUpForCompiler(__dirname);
+
+try {
+  if (compilerPath) {
+    // In Next.js server bundles, `require()` may be webpack's require.
+    // Prefer Node's real require when available.
+    // eslint-disable-next-line no-undef
+    const nodeRequire = typeof __non_webpack_require__ === "function"
+      // eslint-disable-next-line no-undef
+      ? __non_webpack_require__
+      : require;
+    compileJPlusPlus = nodeRequire(compilerPath);
+  }
+} catch {
+  compileJPlusPlus = null;
 }
 
 function executeCompiledJavaScript(jsCode) {
