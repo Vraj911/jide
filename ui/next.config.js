@@ -6,7 +6,6 @@ const nextConfig = {
   experimental: {
     externalDir: true,
   },
-  outputFileTracingRoot: path.join(__dirname, "../"),
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals = [

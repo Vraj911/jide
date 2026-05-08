@@ -1,71 +1,72 @@
 const { Worker } = require("node:worker_threads");
-const path = require("node:path");
-const fs = require("node:fs");
-let compileJPlusPlus = null;
+
+// STATIC IMPORT ONLY
+// NO dynamic require
+const compileJPlusPlus = require("@vraj9112/jpp");
+
 const MAX_SOURCE_CHARS = 20_000;
 const EXECUTION_TIMEOUT_MS = 750;
 const WORKER_MEMORY_MB = 32;
 
-function findUpForCompiler(startDir) {
-  let dir = startDir;
-  for (let i = 0; i < 12; i++) {
-    const candidate = path.join(dir, "lib", "jpp", "compiler.js");
-    if (fs.existsSync(candidate)) return candidate;
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
-}
-
-const compilerPath =
-  findUpForCompiler(process.cwd()) ||
-  findUpForCompiler(__dirname);
-
-try {
-  if (compilerPath) {
-    // In Next.js server bundles, `require()` may be webpack's require.
-    // Prefer Node's real require when available.
-    // eslint-disable-next-line no-undef
-    const nodeRequire = typeof __non_webpack_require__ === "function"
-      // eslint-disable-next-line no-undef
-      ? __non_webpack_require__
-      : require;
-    compileJPlusPlus = nodeRequire(compilerPath);
-  }
-} catch {
-  compileJPlusPlus = null;
-}
-
 function executeCompiledJavaScript(jsCode) {
   return new Promise((resolve) => {
     let settled = false;
+
     const workerCode = `
       const { parentPort, workerData } = require("node:worker_threads");
       const vm = require("node:vm");
+
       const logs = [];
+
       const sandbox = Object.freeze({
         console: Object.freeze({
           log: (...args) => {
-            logs.push(args.map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : String(arg))).join(" "));
+            logs.push(
+              args
+                .map((arg) =>
+                  typeof arg === "object"
+                    ? JSON.stringify(arg)
+                    : String(arg)
+                )
+                .join(" ")
+            );
           },
         }),
       });
+
       try {
         const script = new vm.Script(workerData.code);
-        script.runInNewContext(sandbox, { timeout: workerData.timeoutMs });
-        parentPort.postMessage({ output: logs.join("\\n"), errors: [] });
+
+        script.runInNewContext(sandbox, {
+          timeout: workerData.timeoutMs,
+        });
+
+        parentPort.postMessage({
+          output: logs.join("\\n"),
+          errors: [],
+        });
       } catch (error) {
         parentPort.postMessage({
           output: logs.join("\\n"),
-          errors: [{ message: error instanceof Error ? error.message : "Runtime error", type: "runtime" }],
+          errors: [
+            {
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Runtime error",
+              type: "runtime",
+            },
+          ],
         });
       }
     `;
 
     const worker = new Worker(workerCode, {
       eval: true,
-      workerData: { code: jsCode, timeoutMs: EXECUTION_TIMEOUT_MS },
+      workerData: {
+        code: jsCode,
+        timeoutMs: EXECUTION_TIMEOUT_MS,
+      },
       resourceLimits: {
         maxOldGenerationSizeMb: WORKER_MEMORY_MB,
         maxYoungGenerationSizeMb: 8,
@@ -74,30 +75,54 @@ function executeCompiledJavaScript(jsCode) {
 
     const timeoutId = setTimeout(async () => {
       if (settled) return;
+
       settled = true;
+
       await worker.terminate();
+
       resolve({
         output: "",
-        errors: [{ message: "Execution timed out.", type: "runtime_timeout" }],
+        errors: [
+          {
+            message: "Execution timed out.",
+            type: "runtime_timeout",
+          },
+        ],
       });
     }, EXECUTION_TIMEOUT_MS + 100);
 
     worker.once("message", async (message) => {
       if (settled) return;
+
       settled = true;
+
       clearTimeout(timeoutId);
+
       await worker.terminate();
+
       resolve(message);
     });
 
     worker.once("error", async (error) => {
       if (settled) return;
+
       settled = true;
+
       clearTimeout(timeoutId);
+
       await worker.terminate();
+
       resolve({
         output: "",
-        errors: [{ message: error instanceof Error ? error.message : "Worker error", type: "runtime_worker" }],
+        errors: [
+          {
+            message:
+              error instanceof Error
+                ? error.message
+                : "Worker error",
+            type: "runtime_worker",
+          },
+        ],
       });
     });
   });
@@ -107,24 +132,64 @@ function validateSourceCode(code) {
   if (typeof code !== "string" || code.trim().length === 0) {
     return "Code must be a non-empty string";
   }
+
   if (code.length > MAX_SOURCE_CHARS) {
     return `Code exceeds ${MAX_SOURCE_CHARS} characters`;
   }
-  if (code.includes("\0")) {
+
+  if (code.includes("\\0")) {
     return "Code contains invalid null bytes";
   }
+
   return null;
 }
 
 async function compileAndRunJpp(code) {
-  if (!compileJPlusPlus) {
-    return { status: 500, body: { success: false, code: null, output: null, ast: null, errors: [{ message: "Compiler unavailable", type: "server" }] } };
-  }
   const validationError = validateSourceCode(code);
+
   if (validationError) {
-    return { status: 400, body: { success: false, code: null, output: null, ast: null, errors: [{ message: validationError, type: "validation" }] } };
+    return {
+      status: 400,
+      body: {
+        success: false,
+        code: null,
+        output: null,
+        ast: null,
+        errors: [
+          {
+            message: validationError,
+            type: "validation",
+          },
+        ],
+      },
+    };
   }
-  const compileResult = compileJPlusPlus(code);
+
+  let compileResult;
+
+  try {
+    compileResult = compileJPlusPlus(code);
+  } catch (error) {
+    return {
+      status: 500,
+      body: {
+        success: false,
+        code: null,
+        output: null,
+        ast: null,
+        errors: [
+          {
+            message:
+              error instanceof Error
+                ? error.message
+                : "Compiler crashed",
+            type: "server",
+          },
+        ],
+      },
+    };
+  }
+
   if (!compileResult.success) {
     return {
       status: 200,
@@ -137,7 +202,11 @@ async function compileAndRunJpp(code) {
       },
     };
   }
-  const execution = await executeCompiledJavaScript(compileResult.code || "");
+
+  const execution = await executeCompiledJavaScript(
+    compileResult.code || ""
+  );
+
   return {
     status: 200,
     body: {
@@ -145,9 +214,15 @@ async function compileAndRunJpp(code) {
       code: compileResult.code || null,
       output: execution.output,
       ast: compileResult.ast || null,
-      errors: [...(compileResult.errors || []), ...execution.errors],
+      errors: [
+        ...(compileResult.errors || []),
+        ...execution.errors,
+      ],
     },
   };
 }
 
-module.exports = { executeCompiledJavaScript, compileAndRunJpp };
+module.exports = {
+  executeCompiledJavaScript,
+  compileAndRunJpp,
+};
