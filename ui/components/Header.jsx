@@ -16,14 +16,6 @@ export function Header() {
   className="h-10 w-10 object-contain"
 />
         </Link>
-        <nav className="hidden md:flex items-center gap-6">
-          <Link href="/docs" className="text-sm font-medium hover:text-primary transition-colors">
-            Docs
-          </Link>
-          <Link href="/ide" className="text-sm font-medium hover:text-primary transition-colors">
-            IDE
-          </Link>
-        </nav>
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <Link href="/auth/login">
