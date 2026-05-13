@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,10 @@ export function Settings({
 }) {
   const [localSettings, setLocalSettings] = useState(settings);
 
+  useEffect(() => {
+    setLocalSettings(settings);
+  }, [settings, open]);
+
   const handleSave = () => {
     onSettingsChange(localSettings);
     // Update theme if it changed
@@ -34,7 +38,7 @@ export function Settings({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-h-[85vh] w-[calc(100vw-2rem)] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
@@ -48,7 +52,7 @@ export function Settings({
             <h3 className="text-lg font-semibold">Editor Settings</h3>
             
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Label htmlFor="theme">Theme</Label>
                 <select
                   id="theme"
@@ -57,7 +61,7 @@ export function Settings({
                     const newTheme = e.target.value;
                     setLocalSettings({ ...localSettings, theme: newTheme });
                   }}
-                  className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm sm:w-auto"
                 >
                   <option value="dark">Dark</option>
                   <option value="light">Light</option>
@@ -66,7 +70,7 @@ export function Settings({
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Label htmlFor="fontSize">Font Size</Label>
                 <Input
                   id="fontSize"
@@ -80,7 +84,7 @@ export function Settings({
                       fontSize: parseInt(e.target.value) || 14,
                     })
                   }
-                  className="w-20"
+                  className="w-full sm:w-20"
                 />
               </div>
             </div>
@@ -179,7 +183,7 @@ export function Settings({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-4">
+        <div className="flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>

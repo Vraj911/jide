@@ -61,8 +61,8 @@ export default function Docs() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 pt-20 container mx-auto px-4 pb-10">
-        <h1 className="text-4xl font-bold mb-6">J++ Documentation</h1>
+      <main className="container mx-auto flex-1 px-4 pb-10 pt-20">
+        <h1 className="mb-6 text-3xl font-bold sm:text-4xl">J++ Documentation</h1>
         <div className="grid gap-6">
           <Card className="p-6">
             <h2 className="text-2xl font-semibold mb-3">Language goals</h2>
@@ -119,7 +119,7 @@ bol first . second`}
         </div>
       </main>
 
-      <div className="fixed right-6 bottom-8 z-50">
+      <div className="fixed bottom-6 right-4 z-50 sm:bottom-8 sm:right-6">
         <button
           onClick={() => setChatOpen((open) => !open)}
           aria-label="Toggle docs chat"
@@ -130,7 +130,7 @@ bol first . second`}
       </div>
 
       {chatOpen && (
-        <div className="fixed z-50 right-6 bottom-24 w-[380px] h-[520px]">
+        <div className="fixed bottom-20 left-4 right-4 z-50 h-[min(70vh,520px)] sm:bottom-24 sm:left-auto sm:right-6 sm:w-[380px]">
           <div className="flex flex-col h-full bg-card rounded-lg shadow-xl border border-border overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2 border-b">
               <div className="font-semibold">DOT Assistant</div>
@@ -147,7 +147,7 @@ bol first . second`}
               ))}
             </div>
             <div className="px-3 py-2 border-t">
-              <div className="flex items-center gap-2">
+              <div className="flex items-end gap-2">
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -159,9 +159,9 @@ bol first . second`}
                   }}
                   aria-label="Docs chat input"
                   placeholder="Ask about syntax, compiler, or IDE..."
-                  className="flex-1 min-h-[44px] max-h-28 resize-none bg-transparent outline-none text-sm p-2 rounded"
+                  className="flex-1 min-h-[44px] max-h-28 resize-none rounded bg-transparent p-2 text-sm outline-none"
                 />
-                <Button onClick={sendMessage}>Send</Button>
+                <Button onClick={sendMessage} className="shrink-0">Send</Button>
               </div>
             </div>
           </div>

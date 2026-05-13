@@ -18,8 +18,19 @@ export async function POST(req) {
       return NextResponse.json({ error: "Missing prompt." }, { status: 400 });
     }
     const result = await getRagAnswer(query, { messages });
+    if (process.env.NODE_ENV !== "production" && result?.debug) {
+      console.log("[/api/chat]", result.debug);
+    }
     return NextResponse.json(result);
   } catch (err) {
-    return NextResponse.json({ error: "Failed to generate response." }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: "Failed to generate response.",
+        debug: process.env.NODE_ENV !== "production"
+          ? { message: err instanceof Error ? err.message : String(err) }
+          : undefined,
+      },
+      { status: 500 },
+    );
   }
 }

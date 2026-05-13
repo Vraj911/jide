@@ -11,41 +11,41 @@ export default function Home() {
     <div className="min-h-screen flex flex-col">
       <ThreeBackground variant="particles" />
       <Header />
-      <section className="pt-32 pb-20 px-4 relative overflow-hidden">
+      <section className="relative overflow-hidden px-4 pb-16 pt-24 sm:pt-28 md:pt-32 md:pb-20">
         <div className="container mx-auto relative z-10">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-8">
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight">
+          <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
+            <div className="space-y-6 md:space-y-8">
+              <h1 className="text-4xl font-bold leading-tight sm:text-5xl md:text-6xl lg:text-7xl">
                 Build. Compile.{" "}
                 <span className="text-gradient">Run.</span>
                 <br />
                 In Your Browser.
               </h1>
-              <p className="text-xl text-muted-foreground max-w-lg">
+              <p className="max-w-lg text-base text-muted-foreground sm:text-lg md:text-xl">
                 A modern web-based IDE for J++, your custom language built on JavaScript. 
                 Write, compile, and execute code instantly with powerful editor features.
               </p>
-              <div className="flex flex-wrap gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
                 <Link href="/ide">
-                  <Button size="lg" className="glow-primary-lg group">
+                  <Button size="lg" className="glow-primary-lg group w-full sm:w-auto">
                     Start Coding
                     <Play className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
                 <Link href="/docs">
-                  <Button size="lg" variant="outline">
+                  <Button size="lg" variant="outline" className="w-full sm:w-auto">
                     View Docs
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </Link>
               </div>
             </div>
-            <div className="glass-panel rounded-xl p-6 space-y-4">
+            <div className="glass-panel space-y-4 overflow-hidden rounded-xl p-4 sm:p-6">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Terminal className="h-4 w-4" />
                 <span>main.jpp</span>
               </div>
-              <pre className="text-sm md:text-base">
+              <pre className="overflow-x-auto text-xs sm:text-sm md:text-base">
                 <code className="text-code-keyword">print</code>
                 <code className="text-code-string"> "Hello, World!"</code>
                 {"\n\n"}
@@ -73,12 +73,12 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <section className="py-20 px-4 bg-card/30">
+      <section className="bg-card/30 px-4 py-16 md:py-20">
         <div className="container mx-auto">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
+          <h2 className="mb-10 text-center text-3xl font-bold md:mb-12 md:text-4xl">
             Everything You Need to Code
           </h2>   
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid gap-6 md:grid-cols-3 md:gap-8">
             <Card className="p-6 space-y-4 hover:glow-primary transition-all duration-300 bg-card/50 backdrop-blur">
               <div className="rounded-lg bg-primary/10 w-12 h-12 flex items-center justify-center">
                 <Code2 className="h-6 w-6 text-primary" />

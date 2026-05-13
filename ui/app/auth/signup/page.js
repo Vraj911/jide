@@ -50,7 +50,7 @@ export default function SignupPage() {
     }
   };
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 relative">
+    <div className="relative grid min-h-screen lg:grid-cols-2">
       <ThreeBackground variant="particles" />
             <div className="hidden lg:flex items-center justify-center relative overflow-hidden">
         <div className="relative z-10 text-center space-y-4 p-8">
@@ -69,8 +69,8 @@ export default function SignupPage() {
           </p>
         </div>
       </div>
-      <div className="flex items-center justify-center p-8 relative">
-        <Card className="w-full max-w-md p-8 glass-panel">
+      <div className="relative flex items-center justify-center px-4 py-24 sm:px-6 lg:p-8">
+        <Card className="glass-panel w-full max-w-md p-6 sm:p-8">
           <div className="space-y-6">
             <div className="text-center space-y-2">
               <h1 className="text-3xl font-bold">Create Account</h1>
@@ -116,7 +116,7 @@ export default function SignupPage() {
                 <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <Button variant="outline" className="w-full">
                 <Github className="mr-2 h-4 w-4" />
                 GitHub

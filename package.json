@@ -21,8 +21,8 @@
   "scripts": {
     "dev": "concurrently \"npm run start:ui\" \"npm run dev:lsp\"",
     "dev:lsp": "node lsp-server/server.js",
-    "start:ui": "npm --prefix ui run dev",
-    "build:ui": "npm --prefix ui run build",
+    "start:ui": "npm run dev --workspace ui",
+    "build:ui": "npm run build --workspace ui",
     "test": "node --test --test-concurrency=1 tests/auth-store.test.js tests/auth-api.test.js tests/execute-api.test.js tests/auth-integration.test.js tests/performance.test.js"
   },
   "author": "Vraj Shah shahvraj140@gmail.com",
