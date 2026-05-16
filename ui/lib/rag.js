@@ -1,5 +1,6 @@
 const fs = require("fs/promises");
 const path = require("path");
+const docsContent = require("./docsContent.json");
 
 const CACHE_KEY = "__jide_rag_index__";
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -58,7 +59,7 @@ async function findRepoRoot(startDir) {
   for (let i = 0; i < 6; i++) {
     if (
       (await pathExists(path.join(current, ".git"))) ||
-      (await pathExists(path.join(current, "JPP_README.md")))
+      (await pathExists(path.join(current, "package.json")))
     ) {
       return current;
     }
@@ -89,40 +90,6 @@ async function getServerEnv() {
   const env = { ...fileEnv, ...process.env };
   globalThis[ENV_CACHE_KEY] = env;
   return env;
-}
-
-async function collectMarkdownFiles(rootDir) {
-  const candidates = [
-    path.join(rootDir, "JPP_README.md"),
-    path.join(rootDir, "rag.md"),
-  ];
-
-  const files = [];
-  for (const file of candidates) {
-    if (await pathExists(file)) files.push(file);
-  }
-  return files;
-}
-
-function sectionizeMarkdown(text) {
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
-  const sections = [];
-  let current = { title: "", content: "" };
-
-  for (const line of lines) {
-    if (/^#{1,6}\s+/.test(line)) {
-      if (current.content.trim()) sections.push(current);
-      current = {
-        title: line.replace(/^#{1,6}\s+/, "").trim(),
-        content: "",
-      };
-    } else {
-      current.content += `${line}\n`;
-    }
-  }
-
-  if (current.content.trim()) sections.push(current);
-  return sections;
 }
 
 function chunkSection(title, content) {
@@ -167,24 +134,17 @@ function buildChunkTermData(text) {
 }
 
 async function buildIndex() {
-  const repoRoot = await findRepoRoot(process.cwd());
-  const files = await collectMarkdownFiles(repoRoot);
   const chunks = [];
 
-  for (const filePath of files) {
-    const raw = await fs.readFile(filePath, "utf-8");
-    const sections = sectionizeMarkdown(raw);
+  for (const section of docsContent.documents || []) {
+    const sectionChunks = chunkSection(section.title, section.text);
 
-    for (const section of sections) {
-      const sectionChunks = chunkSection(section.title, section.content);
-
-      for (const chunk of sectionChunks) {
-        chunks.push({
-          text: chunk,
-          source: path.relative(repoRoot, filePath).replace(/\\/g, "/"),
-          ...buildChunkTermData(chunk),
-        });
-      }
+    for (const chunk of sectionChunks) {
+      chunks.push({
+        text: chunk,
+        source: section.source || "docs",
+        ...buildChunkTermData(chunk),
+      });
     }
   }
 
@@ -202,7 +162,7 @@ async function buildIndex() {
     idf[term] = Math.log(1 + docCount / (1 + df[term]));
   }
 
-  return { repoRoot, chunks, idf };
+  return { chunks, idf };
 }
 
 async function getIndex() {

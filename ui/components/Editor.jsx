@@ -27,6 +27,7 @@ export function Editor({
   minimap = true,
   onLspStatusChange,
   onDiagnosticsChange,
+  onEditorReady,
 }) {
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -35,6 +36,7 @@ export function Editor({
   const lspConnectedRef = useRef(false);
   const lspLanguageRegisteredRef = useRef(false);
   const lspDocumentUriRef = useRef("file:///workspace/main.jpp");
+  const contextMenuCleanupRef = useRef(null);
 
   const handleEditorDidMount = async (editor, monaco) => {
     editorRef.current = editor;
@@ -52,6 +54,16 @@ export function Editor({
     }
 
     monaco.editor.setTheme(theme === "dark" ? "jpp-dark" : "jpp-light");
+    onEditorReady?.({ editor, monaco });
+
+    const editorDomNode = editor.getDomNode();
+    if (editorDomNode) {
+      const suppressContextMenu = (event) => event.preventDefault();
+      editorDomNode.addEventListener("contextmenu", suppressContextMenu);
+      contextMenuCleanupRef.current = () => {
+        editorDomNode.removeEventListener("contextmenu", suppressContextMenu);
+      };
+    }
 
     if (!readOnly && language === JPP_LANGUAGE_ID && !lspConnectedRef.current) {
       if (!ENABLE_LSP) {
@@ -138,6 +150,10 @@ export function Editor({
         markerDisposableRef.current.dispose();
         markerDisposableRef.current = null;
       }
+      if (contextMenuCleanupRef.current) {
+        contextMenuCleanupRef.current();
+        contextMenuCleanupRef.current = null;
+      }
       if (lspCleanupRef.current) {
         lspCleanupRef.current();
         lspCleanupRef.current = null;
@@ -164,6 +180,11 @@ export function Editor({
         tabSize: 2,
         wordWrap: wordWrap === "on" ? "on" : "off",
         minimap: { enabled: minimap && !readOnly },
+        contextmenu: false,
+        glyphMargin: false,
+        codeLens: false,
+        folding: false,
+        links: false,
       }}
     />
   );

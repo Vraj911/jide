@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const jppExecution = require("../apps/ui/lib/jppExecution.cjs");
-const { getRagAnswer } = require("../apps/ui/lib/rag.js");
+const jppExecution = require("../ui/lib/jppExecution.cjs");
+const { getRagAnswer } = require("../ui/lib/rag.js");
 
 test("execution endpoint core logic responds under performance budget", async () => {
   const start = process.hrtime.bigint();

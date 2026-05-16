@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const jppExecution = require("../apps/ui/lib/jppExecution.cjs");
+const jppExecution = require("../ui/lib/jppExecution.cjs");
 
 test("compileAndRunJpp returns output for valid program", async () => {
   const code = "ye x = 5\nbol x";

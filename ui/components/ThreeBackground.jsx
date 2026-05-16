@@ -63,9 +63,9 @@ export function ThreeBackground({ variant = "particles" }) {
             posArray[i],
             posArray[i + 1],
             posArray[i + 2],
-            posArray[i + 3] || posArray[0],
-            posArray[i + 4] || posArray[1],
-            posArray[i + 5] || posArray[2]
+            posArray[i + 3] ?? posArray[0],
+            posArray[i + 4] ?? posArray[1],
+            posArray[i + 5] ?? posArray[2]
           );
         }
         lineGeometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));

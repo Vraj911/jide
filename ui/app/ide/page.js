@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   AlertCircle,
   CheckCircle2,
+  Command,
   Code2,
   FileCode,
   ListX,
   Play,
+  RotateCcw,
+  RotateCw,
+  Search,
   Settings as SettingsIcon,
   Terminal as TerminalIcon,
 } from "lucide-react";
@@ -34,12 +38,35 @@ jabtak x < 15 {
 }`;
 
 const ENABLE_LSP = process.env.NEXT_PUBLIC_ENABLE_LSP === "true";
+const COMMAND_MENU_WIDTH = 360;
+const COMMAND_MENU_MAX_HEIGHT = 420;
+const COMMAND_MENU_MARGIN = 16;
+
+function getCommandMenuPosition(x, y) {
+  if (typeof window === "undefined") {
+    return { x, y, maxHeight: COMMAND_MENU_MAX_HEIGHT };
+  }
+
+  const maxHeight = Math.max(220, Math.min(COMMAND_MENU_MAX_HEIGHT, window.innerHeight - COMMAND_MENU_MARGIN * 2));
+  const clampedX = Math.max(
+    COMMAND_MENU_MARGIN,
+    Math.min(x, window.innerWidth - COMMAND_MENU_WIDTH - COMMAND_MENU_MARGIN),
+  );
+  const clampedY = Math.max(
+    COMMAND_MENU_MARGIN,
+    Math.min(y, window.innerHeight - maxHeight - COMMAND_MENU_MARGIN),
+  );
+
+  return { x: clampedX, y: clampedY, maxHeight };
+}
 
 export default function IDE() {
   const { theme: appTheme, setTheme: setAppTheme } = useTheme();
+  const editorApiRef = useRef(null);
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [commandsMenu, setCommandsMenu] = useState({ open: false, x: 0, y: 0, maxHeight: COMMAND_MENU_MAX_HEIGHT });
   const [sourceCode, setSourceCode] = useState(DEFAULT_CODE);
   const [compiledCode, setCompiledCode] = useState("");
   const [output, setOutput] = useState("");
@@ -129,6 +156,108 @@ export default function IDE() {
     }
   };
 
+  const runEditorAction = async (actionId) => {
+    const editor = editorApiRef.current?.editor;
+    if (!editor) return;
+    editor.focus();
+    await editor.getAction(actionId)?.run();
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      const isCommandShortcut = event.key === "F1" || ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "p");
+      const isCompileShortcut = (event.ctrlKey || event.metaKey) && event.key === "Enter";
+      const isWrapShortcut = event.altKey && event.key.toLowerCase() === "z";
+
+      if (isCommandShortcut) {
+        event.preventDefault();
+        event.stopPropagation();
+        setCommandsMenu({
+          open: true,
+          ...getCommandMenuPosition(window.innerWidth / 2 - 180, window.innerHeight / 2 - 140),
+        });
+        return;
+      }
+
+      if (isCompileShortcut) {
+        event.preventDefault();
+        handleCompileAndRun();
+        return;
+      }
+
+      if (isWrapShortcut) {
+        event.preventDefault();
+        setSettings((prev) => ({ ...prev, wordWrap: !prev.wordWrap }));
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [handleCompileAndRun]);
+
+  useEffect(() => {
+    const closeMenu = () => setCommandsMenu((prev) => (prev.open ? { ...prev, open: false } : prev));
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
+  }, []);
+
+  const commandItems = [
+    {
+      id: "compile",
+      title: "Compile & Run",
+      shortcut: "Ctrl + Enter",
+      icon: Play,
+      description: "Compile the current J++ file and run it in the output panel.",
+      action: () => handleCompileAndRun(),
+    },
+    {
+      id: "find",
+      title: "Find",
+      shortcut: "Ctrl + F",
+      icon: Search,
+      description: "Search inside the current file.",
+      action: () => runEditorAction("actions.find"),
+    },
+    {
+      id: "replace",
+      title: "Replace",
+      shortcut: "Ctrl + H",
+      icon: Search,
+      description: "Open replace for the current file.",
+      action: () => runEditorAction("editor.action.startFindReplaceAction"),
+    },
+    {
+      id: "goto-line",
+      title: "Go to Line",
+      shortcut: "Ctrl + G",
+      icon: Command,
+      description: "Jump directly to a line number.",
+      action: () => runEditorAction("editor.action.gotoLine"),
+    },
+    {
+      id: "undo",
+      title: "Undo",
+      shortcut: "Ctrl + Z",
+      icon: RotateCcw,
+      description: "Revert the last editor change.",
+      action: () => runEditorAction("undo"),
+    },
+    {
+      id: "redo",
+      title: "Redo",
+      shortcut: "Ctrl + Y",
+      icon: RotateCw,
+      description: "Re-apply the last reverted change.",
+      action: () => runEditorAction("redo"),
+    },
+  ];
+
   if (!mounted) {
     return null;
   }
@@ -207,7 +336,16 @@ export default function IDE() {
       <div className="flex h-10 items-center border-b border-panel-border px-4 text-sm font-medium text-editor-fg">
         <span>Source Code</span>
       </div>
-      <div className="flex-1">
+      <div
+        className="relative flex-1"
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setCommandsMenu({
+            open: true,
+            ...getCommandMenuPosition(event.clientX, event.clientY),
+          });
+        }}
+      >
         <Editor
           value={sourceCode}
           onChange={setSourceCode}
@@ -217,7 +355,52 @@ export default function IDE() {
           minimap={isMobile ? false : settings.minimap}
           onLspStatusChange={setLspStatus}
           onDiagnosticsChange={setDiagnostics}
+          onEditorReady={(api) => {
+            editorApiRef.current = api;
+          }}
         />
+
+        {commandsMenu.open && (
+          <div
+            className="fixed z-50 w-[360px] overflow-hidden rounded-xl border border-border/80 bg-card/95 shadow-2xl backdrop-blur-xl"
+            style={{
+              left: commandsMenu.x,
+              top: commandsMenu.y,
+              maxHeight: `${commandsMenu.maxHeight}px`,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="border-b border-border/50 px-3 py-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Quick Commands
+            </div>
+            <div
+              className="overflow-y-auto p-2"
+              style={{ maxHeight: `${Math.max(120, commandsMenu.maxHeight - 40)}px` }}
+            >
+              {commandItems.map(({ id, title, shortcut, icon: Icon, action }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setCommandsMenu((prev) => ({ ...prev, open: false }));
+                    action();
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left transition-colors hover:bg-primary/12"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-md border border-primary/20 bg-primary/10 p-2 text-primary">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium text-foreground">{title}</span>
+                  </div>
+                  <span className="rounded-md border border-border/60 bg-background/50 px-2 py-1 text-xs text-muted-foreground">
+                    {shortcut}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
