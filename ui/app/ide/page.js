@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
@@ -22,7 +21,6 @@ import { Editor } from "@/components/Editor";
 import { Header } from "@/components/Header";
 import { Settings } from "@/components/Settings";
 import { ThreeBackground } from "@/components/ThreeBackground";
-
 const DEFAULT_CODE = `ye x = 10
 ye y = 20
 ye sum = x + y
@@ -36,17 +34,14 @@ jabtak x < 15 {
   bol x
   x = x + 1
 }`;
-
 const ENABLE_LSP = process.env.NEXT_PUBLIC_ENABLE_LSP === "true";
 const COMMAND_MENU_WIDTH = 360;
 const COMMAND_MENU_MAX_HEIGHT = 420;
 const COMMAND_MENU_MARGIN = 16;
-
 function getCommandMenuPosition(x, y) {
   if (typeof window === "undefined") {
     return { x, y, maxHeight: COMMAND_MENU_MAX_HEIGHT };
   }
-
   const maxHeight = Math.max(220, Math.min(COMMAND_MENU_MAX_HEIGHT, window.innerHeight - COMMAND_MENU_MARGIN * 2));
   const clampedX = Math.max(
     COMMAND_MENU_MARGIN,
@@ -59,7 +54,6 @@ function getCommandMenuPosition(x, y) {
 
   return { x: clampedX, y: clampedY, maxHeight };
 }
-
 export default function IDE() {
   const { theme: appTheme, setTheme: setAppTheme } = useTheme();
   const editorApiRef = useRef(null);
@@ -85,28 +79,23 @@ export default function IDE() {
     showCompiled: true,
     showProblems: true,
   });
-
   useEffect(() => {
     setMounted(true);
     if (appTheme) {
       setSettings((prev) => ({ ...prev, theme: appTheme }));
     }
   }, [appTheme]);
-
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 767px)");
     const updateIsMobile = () => setIsMobile(mediaQuery.matches);
-
     updateIsMobile();
     mediaQuery.addEventListener("change", updateIsMobile);
     return () => mediaQuery.removeEventListener("change", updateIsMobile);
   }, []);
-
   const handleThemeChange = (newTheme) => {
     setSettings((prev) => ({ ...prev, theme: newTheme }));
     setAppTheme(newTheme);
   };
-
   const handleCompileAndRun = async () => {
     setIsCompiling(true);
     if (settings.clearOutput) {
@@ -114,7 +103,6 @@ export default function IDE() {
       setCompiledCode("");
       setOutput("");
     }
-
     try {
       const response = await fetch("/api/execute", {
         method: "POST",
@@ -123,9 +111,7 @@ export default function IDE() {
         },
         body: JSON.stringify({ code: sourceCode }),
       });
-
       const result = await response.json();
-
       if (result.success) {
         setCompiledCode(result.code || "");
         setOutput(result.output || "");
@@ -155,20 +141,17 @@ export default function IDE() {
       setIsCompiling(false);
     }
   };
-
   const runEditorAction = async (actionId) => {
     const editor = editorApiRef.current?.editor;
     if (!editor) return;
     editor.focus();
     await editor.getAction(actionId)?.run();
   };
-
   useEffect(() => {
     const handleKeyDown = (event) => {
       const isCommandShortcut = event.key === "F1" || ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "p");
       const isCompileShortcut = (event.ctrlKey || event.metaKey) && event.key === "Enter";
       const isWrapShortcut = event.altKey && event.key.toLowerCase() === "z";
-
       if (isCommandShortcut) {
         event.preventDefault();
         event.stopPropagation();
@@ -178,23 +161,19 @@ export default function IDE() {
         });
         return;
       }
-
       if (isCompileShortcut) {
         event.preventDefault();
         handleCompileAndRun();
         return;
       }
-
       if (isWrapShortcut) {
         event.preventDefault();
         setSettings((prev) => ({ ...prev, wordWrap: !prev.wordWrap }));
       }
     };
-
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [handleCompileAndRun]);
-
   useEffect(() => {
     const closeMenu = () => setCommandsMenu((prev) => (prev.open ? { ...prev, open: false } : prev));
     window.addEventListener("click", closeMenu);
@@ -206,7 +185,6 @@ export default function IDE() {
       window.removeEventListener("scroll", closeMenu, true);
     };
   }, []);
-
   const commandItems = [
     {
       id: "compile",
@@ -261,7 +239,6 @@ export default function IDE() {
   if (!mounted) {
     return null;
   }
-
   const panelCount = diagnostics.length + errors.length;
   const lspLabel =
     lspStatus === "connected"
@@ -271,7 +248,6 @@ export default function IDE() {
         : lspStatus === "disabled"
           ? "LSP disabled"
           : "Connecting...";
-
   const panelTabs = [
     { id: "source", label: "Source", icon: FileCode },
     ...(settings.showCompiled ? [{ id: "compiled", label: "Compiled", icon: Code2 }] : []),
@@ -280,7 +256,6 @@ export default function IDE() {
       ? [{ id: "problems", label: `Problems${panelCount ? ` (${panelCount})` : ""}`, icon: ListX }]
       : []),
   ];
-
   const problemsPanel = (
     <div className="flex h-full flex-col bg-panel-bg">
       <div className="flex h-10 items-center gap-2 border-b border-panel-border px-4 text-sm font-medium text-editor-fg">
@@ -330,7 +305,6 @@ export default function IDE() {
       </div>
     </div>
   );
-
   const sourcePanel = (
     <div className="flex h-full flex-col bg-editor-bg">
       <div className="flex h-10 items-center border-b border-panel-border px-4 text-sm font-medium text-editor-fg">
@@ -385,8 +359,7 @@ export default function IDE() {
                     setCommandsMenu((prev) => ({ ...prev, open: false }));
                     action();
                   }}
-                  className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left transition-colors hover:bg-primary/12"
-                >
+                  className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left transition-colors hover:bg-primary/12"  >
                   <div className="flex items-center gap-3">
                     <div className="rounded-md border border-primary/20 bg-primary/10 p-2 text-primary">
                       <Icon className="h-4 w-4" />
@@ -404,7 +377,6 @@ export default function IDE() {
       </div>
     </div>
   );
-
   const compiledPanel = (
     <div className="flex h-full flex-col bg-panel-bg">
       <div className="flex h-10 items-center border-b border-panel-border px-4 text-sm font-medium text-editor-fg">
@@ -424,7 +396,6 @@ export default function IDE() {
       </div>
     </div>
   );
-
   const outputPanel = (
     <div className="flex h-full flex-col bg-terminal-bg">
       <div className="flex h-10 items-center gap-2 border-b border-panel-border px-4 text-sm font-medium">
@@ -438,7 +409,6 @@ export default function IDE() {
       </div>
     </div>
   );
-
   return (
     <div className="flex h-screen flex-col bg-background">
       <ThreeBackground variant="particles" />
@@ -471,7 +441,6 @@ export default function IDE() {
           </Button>
         </div>
       </div>
-
       <div className="flex-1 overflow-hidden">
         {isMobile ? (
           <div className="flex h-full flex-col overflow-hidden">
@@ -491,7 +460,6 @@ export default function IDE() {
                 ))}
               </div>
             </div>
-
             <div className="flex-1 overflow-hidden">
               {mobileTab === "source" && sourcePanel}
               {mobileTab === "compiled" && settings.showCompiled && compiledPanel}
@@ -504,9 +472,7 @@ export default function IDE() {
             <Panel defaultSize={50} minSize={30}>
               {sourcePanel}
             </Panel>
-
             <PanelResizeHandle className="w-1 bg-border transition-colors hover:bg-primary" />
-
             <Panel defaultSize={50} minSize={30}>
               <PanelGroup direction="vertical">
                 {settings.showCompiled && (
@@ -517,14 +483,11 @@ export default function IDE() {
                     <PanelResizeHandle className="h-1 bg-border transition-colors hover:bg-primary" />
                   </>
                 )}
-
                 <Panel
                   defaultSize={settings.showCompiled && settings.showProblems ? 33 : settings.showCompiled || settings.showProblems ? 50 : 100}
-                  minSize={15}
-                >
+                  minSize={15}>
                   {outputPanel}
                 </Panel>
-
                 {settings.showProblems && (
                   <>
                     <PanelResizeHandle className="h-1 bg-border transition-colors hover:bg-primary" />
@@ -538,7 +501,6 @@ export default function IDE() {
           </PanelGroup>
         )}
       </div>
-
       <Settings
         open={settingsOpen}
         onOpenChange={setSettingsOpen}

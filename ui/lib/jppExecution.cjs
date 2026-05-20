@@ -1,17 +1,11 @@
 const { Worker } = require("node:worker_threads");
-
-// STATIC IMPORT ONLY
-// NO dynamic require
 const compileJPlusPlus = require("@vraj9112/jpp");
-
 const MAX_SOURCE_CHARS = 20_000;
 const EXECUTION_TIMEOUT_MS = 750;
 const WORKER_MEMORY_MB = 32;
-
 function executeCompiledJavaScript(jsCode) {
   return new Promise((resolve) => {
     let settled = false;
-
     const workerCode = `
       const { parentPort, workerData } = require("node:worker_threads");
       const vm = require("node:vm");
@@ -60,7 +54,6 @@ function executeCompiledJavaScript(jsCode) {
         });
       }
     `;
-
     const worker = new Worker(workerCode, {
       eval: true,
       workerData: {
@@ -72,14 +65,10 @@ function executeCompiledJavaScript(jsCode) {
         maxYoungGenerationSizeMb: 8,
       },
     });
-
     const timeoutId = setTimeout(async () => {
       if (settled) return;
-
       settled = true;
-
       await worker.terminate();
-
       resolve({
         output: "",
         errors: [
@@ -90,28 +79,18 @@ function executeCompiledJavaScript(jsCode) {
         ],
       });
     }, EXECUTION_TIMEOUT_MS + 100);
-
     worker.once("message", async (message) => {
       if (settled) return;
-
       settled = true;
-
       clearTimeout(timeoutId);
-
       await worker.terminate();
-
       resolve(message);
     });
-
     worker.once("error", async (error) => {
       if (settled) return;
-
       settled = true;
-
       clearTimeout(timeoutId);
-
       await worker.terminate();
-
       resolve({
         output: "",
         errors: [
@@ -127,26 +106,20 @@ function executeCompiledJavaScript(jsCode) {
     });
   });
 }
-
 function validateSourceCode(code) {
   if (typeof code !== "string" || code.trim().length === 0) {
     return "Code must be a non-empty string";
   }
-
   if (code.length > MAX_SOURCE_CHARS) {
     return `Code exceeds ${MAX_SOURCE_CHARS} characters`;
   }
-
   if (code.includes("\\0")) {
     return "Code contains invalid null bytes";
   }
-
   return null;
 }
-
 async function compileAndRunJpp(code) {
   const validationError = validateSourceCode(code);
-
   if (validationError) {
     return {
       status: 400,
@@ -164,9 +137,7 @@ async function compileAndRunJpp(code) {
       },
     };
   }
-
   let compileResult;
-
   try {
     compileResult = compileJPlusPlus(code);
   } catch (error) {
@@ -189,7 +160,6 @@ async function compileAndRunJpp(code) {
       },
     };
   }
-
   if (!compileResult.success) {
     return {
       status: 200,
@@ -202,11 +172,9 @@ async function compileAndRunJpp(code) {
       },
     };
   }
-
   const execution = await executeCompiledJavaScript(
     compileResult.code || ""
   );
-
   return {
     status: 200,
     body: {
@@ -221,7 +189,6 @@ async function compileAndRunJpp(code) {
     },
   };
 }
-
 module.exports = {
   executeCompiledJavaScript,
   compileAndRunJpp,

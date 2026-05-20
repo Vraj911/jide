@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import jppExecution from '@/lib/jppExecution.cjs';
 import { applyRateLimit } from '@/lib/rateLimit.cjs';
 const { compileAndRunJpp } = jppExecution;
-
 export async function POST(request) {
   try {
     const rate = applyRateLimit(request, "execute", { limit: 30, windowMs: 60_000 });
@@ -12,7 +11,6 @@ export async function POST(request) {
     const body = await request.json();
     const result = await compileAndRunJpp(body?.code);
     return NextResponse.json(result.body, { status: result.status });
-
   } catch (error) {
     return NextResponse.json(
       {

@@ -1,5 +1,4 @@
 'use strict';
-
 const KEYWORD_DOCS = {
   'ye': '**ye** - declare a variable\n\n`ye name = value`',
   'bol': '**bol** - print to output\n\n`bol expression`',
@@ -12,7 +11,6 @@ const KEYWORD_DOCS = {
   'break': '**break** - exit the current loop immediately',
   'continue': '**continue** - skip to the next loop iteration'
 };
-
 const OPERATOR_DOCS = {
   '+': '`+` - numeric addition *(numbers only, no coercion)*',
   '-': '`-` - numeric subtraction',
@@ -27,28 +25,22 @@ const OPERATOR_DOCS = {
   '>=': '`>=` - greater than or equal',
   '=': '`=` - assignment'
 };
-
 function getHover(line, col, tokens, typeChecker) {
   if (!tokens || tokens.length === 0) return null;
-
   const token = tokens.find((t) => {
     const len = String(t.value).length;
     return t.line === line && col >= t.col && col < t.col + len;
   });
-
   if (!token) return null;
-
   const range = {
     line: token.line,
     col: token.col,
     endCol: token.col + String(token.value).length
   };
-
   if (token.type === 'keyword') {
     const doc = KEYWORD_DOCS[token.value];
     return doc ? { content: doc, range } : null;
   }
-
   if (token.type === 'identifier') {
     if (!typeChecker) {
       return {
@@ -63,22 +55,17 @@ function getHover(line, col, tokens, typeChecker) {
     }
     return { content: `**${token.value}** - undeclared variable`, range };
   }
-
   if (token.type === 'number') {
     return { content: `\`${token.value}\` - number literal`, range };
   }
-
   if (token.type === 'string') {
     const preview = token.value.length > 40 ? token.value.slice(0, 40) + '...' : token.value;
     return { content: `\`"${preview}"\` - string literal *(${token.value.length} chars)*`, range };
   }
-
   if (token.type === 'operator') {
     const doc = OPERATOR_DOCS[token.value];
     return doc ? { content: doc, range } : null;
   }
-
   return null;
 }
-
 module.exports = { getHover };

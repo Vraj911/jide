@@ -1,12 +1,10 @@
 'use strict';
-
 function getSymbols(ast, typeChecker) {
   if (!ast) return [];
   const symbols = [];
   walkStatements(ast.body || [], symbols, typeChecker);
   return symbols;
 }
-
 function walkStatements(stmts, symbols, typeChecker) {
   for (const stmt of stmts) {
     if (stmt.type === 'Declaration') {
@@ -43,5 +41,4 @@ function walkStatements(stmts, symbols, typeChecker) {
     }
   }
 }
-
 module.exports = { getSymbols };

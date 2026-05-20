@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useRef, useState } from "react";
 import { BookOpen, Braces, Cpu, MessageSquare, Sparkles, Workflow, X } from "lucide-react";
 import { Header } from "@/components/Header";
@@ -7,7 +6,6 @@ import { Footer } from "@/components/Footer";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import docsContent from "@/lib/docsContent.json";
-
 const iconMap = {
   language: BookOpen,
   syntax: Braces,
@@ -15,29 +13,24 @@ const iconMap = {
   lsp: Sparkles,
   runtime: Cpu,
 };
-
 export default function Docs() {
   const [chatOpen, setChatOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const messagesRef = useRef(null);
-
   useEffect(() => {
     if (messagesRef.current) {
       messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
     }
   }, [messages, chatOpen]);
-
   async function sendMessage() {
     const content = input.trim();
     if (!content) return;
-
     const userMessage = { id: `${Date.now()}-u`, role: "user", content };
     const placeholderId = `${Date.now()}-a`;
     const nextMessages = [...messages, userMessage];
     setMessages([...nextMessages, { id: placeholderId, role: "assistant", content: "" }]);
     setInput("");
-
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -46,7 +39,6 @@ export default function Docs() {
           messages: nextMessages.map((message) => ({ role: message.role, content: message.content })),
         }),
       });
-
       const result = await response.json();
       const sources =
         Array.isArray(result.sources) && result.sources.length > 0
@@ -55,7 +47,6 @@ export default function Docs() {
       const reply = response.ok
         ? `${result.answer || "No answer available."}${sources}`
         : result.error || "Failed to get response.";
-
       setMessages((prev) => prev.map((message) => (message.id === placeholderId ? { ...message, content: reply } : message)));
     } catch (error) {
       setMessages((prev) =>
@@ -67,7 +58,6 @@ export default function Docs() {
       );
     }
   }
-
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -89,7 +79,6 @@ export default function Docs() {
                 ))}
               </div>
             </div>
-
             <Card className="border-border/60 bg-background/70 p-5">
               <h2 className="mb-4 text-lg font-semibold">On this page</h2>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -108,7 +97,6 @@ export default function Docs() {
             </Card>
           </div>
         </section>
-
         <section id="language" className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <Card className="p-6">
             <h2 className="mb-3 text-2xl font-semibold">Why J++ exists</h2>
@@ -125,7 +113,6 @@ export default function Docs() {
               ))}
             </div>
           </Card>
-
           <Card className="p-6">
             <h2 className="mb-3 text-2xl font-semibold">Quick syntax</h2>
             <pre className="overflow-x-auto rounded-2xl border border-border/50 bg-panel-bg p-4 text-sm text-muted-foreground whitespace-pre-wrap">
@@ -133,7 +120,6 @@ export default function Docs() {
             </pre>
           </Card>
         </section>
-
         <section id="syntax" className="mt-8 grid gap-6">
           <Card className="p-6">
             <h2 className="mb-3 text-2xl font-semibold">Types and operators</h2>
@@ -162,7 +148,6 @@ export default function Docs() {
               </table>
             </div>
           </Card>
-
           <div className="grid gap-6 lg:grid-cols-2">
             {docsContent.keywordGroups.map((group) => (
               <Card key={group.title} className="p-6">
@@ -178,7 +163,6 @@ export default function Docs() {
               </Card>
             ))}
           </div>
-
           <div className="grid gap-6 lg:grid-cols-2">
             <Card className="p-6">
               <h3 className="mb-3 text-xl font-semibold">Control flow example</h3>
@@ -196,7 +180,6 @@ export default function Docs() {
             </Card>
           </div>
         </section>
-
         <section id="compiler" className="mt-8 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
           <Card className="p-6">
             <h2 className="mb-3 text-2xl font-semibold">Compiler pipeline</h2>
@@ -208,7 +191,6 @@ export default function Docs() {
               what makes the IDE and the language server able to share the same semantic rules.
             </p>
           </Card>
-
           <Card className="p-6">
             <h2 className="mb-4 text-2xl font-semibold">What each stage does</h2>
             <div className="space-y-4">
@@ -221,7 +203,6 @@ export default function Docs() {
             </div>
           </Card>
         </section>
-
         <section id="lsp" className="mt-8 grid gap-6">
           <Card className="p-6">
             <h2 className="mb-3 text-2xl font-semibold">LSP in the J++ IDE</h2>
@@ -238,7 +219,6 @@ export default function Docs() {
               ))}
             </div>
           </Card>
-
           <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
             <Card className="p-6">
               <h3 className="mb-4 text-xl font-semibold">Request lifecycle</h3>
@@ -251,7 +231,6 @@ export default function Docs() {
                 ))}
               </div>
             </Card>
-
             <Card className="p-6">
               <h3 className="mb-4 text-xl font-semibold">Implementation details that matter</h3>
               <div className="space-y-4 text-sm text-muted-foreground">
@@ -265,7 +244,6 @@ export default function Docs() {
             </Card>
           </div>
         </section>
-
         <section id="runtime" className="mt-8 grid gap-6 lg:grid-cols-[1fr_1fr]">
           <Card className="p-6">
             <h2 className="mb-3 text-2xl font-semibold">Execution model</h2>
@@ -273,7 +251,6 @@ export default function Docs() {
               {docsContent.runtime.execution}
             </p>
           </Card>
-
           <Card className="p-6">
             <h2 className="mb-3 text-2xl font-semibold">Docs assistant</h2>
             <p className="text-muted-foreground">
@@ -282,7 +259,6 @@ export default function Docs() {
           </Card>
         </section>
       </main>
-
       <div className="fixed bottom-6 right-4 z-50 sm:bottom-8 sm:right-6">
         <button
           onClick={() => setChatOpen((open) => !open)}
@@ -292,7 +268,6 @@ export default function Docs() {
           <MessageSquare className="h-6 w-6" />
         </button>
       </div>
-
       {chatOpen && (
         <div className="fixed bottom-20 left-4 right-4 z-50 h-[min(70vh,520px)] sm:bottom-24 sm:left-auto sm:right-6 sm:w-[380px]">
           <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xl">

@@ -1,39 +1,29 @@
 'use strict';
-
 const { WebSocketServer } = require('ws');
 const { analyze } = require('./analysis');
 const { getHover } = require('./hover');
 const { getCompletions } = require('./completion');
 const { getDefinition } = require('./definition');
 const { getSymbols } = require('./symbols');
-
 const PORT = process.env.PORT || process.env.LSP_PORT || 3001;
 const wss = new WebSocketServer({ port: PORT });
-
 console.log(`[J++ LSP] WebSocket server listening on ws://localhost:${PORT}`);
-
 wss.on('connection', (ws, req) => {
   console.log('[J++ LSP] Client connected:', req.socket.remoteAddress);
-
   const documents = new Map();
   const debounceTimers = new Map();
-
   function send(obj) {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
   }
-
   function respond(id, result) {
     send({ jsonrpc: '2.0', id, result });
   }
-
   function respondError(id, code, message) {
     send({ jsonrpc: '2.0', id, error: { code, message } });
   }
-
   function notify(method, params) {
     send({ jsonrpc: '2.0', method, params });
   }
-
   function scheduleDiagnostics(uri, text) {
     if (debounceTimers.has(uri)) clearTimeout(debounceTimers.get(uri));
     debounceTimers.set(
@@ -53,7 +43,6 @@ wss.on('connection', (ws, req) => {
       }, 250)
     );
   }
-
   ws.on('message', (raw) => {
     let msg;
     try {
@@ -61,9 +50,7 @@ wss.on('connection', (ws, req) => {
     } catch {
       return;
     }
-
     const { id, method, params } = msg;
-
     switch (method) {
       case 'initialize':
         respond(id, {
@@ -206,12 +193,10 @@ wss.on('connection', (ws, req) => {
         if (id !== undefined) respondError(id, -32601, `Method not found: ${method}`);
     }
   });
-
   ws.on('close', () => {
     console.log('[J++ LSP] Client disconnected');
     debounceTimers.forEach((t) => clearTimeout(t));
   });
-
   ws.on('error', (err) => {
     console.error('[J++ LSP] Error:', err.message);
   });

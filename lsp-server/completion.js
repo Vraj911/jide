@@ -1,5 +1,4 @@
 'use strict';
-
 const KEYWORDS = [
   { label: 'ye', detail: 'declare variable', doc: '`ye name = value`' },
   { label: 'bol', detail: 'print value', doc: '`bol expression`' },
@@ -12,11 +11,9 @@ const KEYWORDS = [
   { label: 'break', detail: 'exit loop', doc: '`break`' },
   { label: 'continue', detail: 'next iteration', doc: '`continue`' }
 ];
-
 function getCompletions(line, col, tokens, typeChecker) {
   const items = [];
   let prefix = '';
-
   if (tokens && line && col) {
     const tok = tokens.find(
       (t) =>
@@ -29,7 +26,6 @@ function getCompletions(line, col, tokens, typeChecker) {
       prefix = String(tok.value).slice(0, col - tok.col).toLowerCase();
     }
   }
-
   for (const kw of KEYWORDS) {
     if (!prefix || kw.label.startsWith(prefix)) {
       items.push({
@@ -40,7 +36,6 @@ function getCompletions(line, col, tokens, typeChecker) {
       });
     }
   }
-
   if (typeChecker) {
     for (const [name, type] of typeChecker.getVariables()) {
       if (!prefix || name.toLowerCase().startsWith(prefix)) {
@@ -53,8 +48,6 @@ function getCompletions(line, col, tokens, typeChecker) {
       }
     }
   }
-
   return items;
 }
-
 module.exports = { getCompletions };
