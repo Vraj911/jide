@@ -9,9 +9,7 @@ function executeCompiledJavaScript(jsCode) {
     const workerCode = `
       const { parentPort, workerData } = require("node:worker_threads");
       const vm = require("node:vm");
-
       const logs = [];
-
       const sandbox = Object.freeze({
         console: Object.freeze({
           log: (...args) => {
@@ -27,14 +25,11 @@ function executeCompiledJavaScript(jsCode) {
           },
         }),
       });
-
       try {
         const script = new vm.Script(workerData.code);
-
         script.runInNewContext(sandbox, {
           timeout: workerData.timeoutMs,
         });
-
         parentPort.postMessage({
           output: logs.join("\\n"),
           errors: [],

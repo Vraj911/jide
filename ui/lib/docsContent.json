@@ -1,53 +1,43 @@
 {
   "hero": {
     "eyebrow": "J++ Reference",
-    "title": "Language rules, compiler flow, and LSP behavior in one place.",
-    "description": "This page combines the core J++ language documentation with the practical details that power the editor: strict typing, syntax, compilation, diagnostics, hover, completion, and definition support.",
-    "tags": ["Strict types", "Hindi-inspired keywords", "Monaco + WebSocket LSP", "Compile to JavaScript"]
+    "title": "Language syntax, types, and coercion rules.",
+    "description": "J++ is a strictly typed language with two primitives: number and string. There is no implicit coercion—mixed-type mistakes are rejected at compile time.",
+    "tags": ["Strict types", "No implicit coercion", "Hindi-inspired keywords", "number and string only"]
   },
   "sections": [
     {
       "id": "language",
-      "title": "J++ Language",
-      "summary": "J++ is a small strictly typed language that compiles to JavaScript. Its design removes JavaScript-style implicit coercion, so arithmetic and string operations stay predictable."
+      "title": "Language overview",
+      "summary": "J++ compiles to JavaScript but rejects JavaScript-style implicit coercion. Arithmetic and text operations stay predictable."
     },
     {
       "id": "syntax",
-      "title": "Syntax and Types",
-      "summary": "The language has two primitive types, number and string. Variables keep the type from their first assignment, and invalid reassignment is rejected at compile time."
+      "title": "Syntax and keywords",
+      "summary": "Declare with ye, print with bol, branch with agar/nahi, and loop with jabtak or ke liye … tak."
     },
     {
-      "id": "compiler",
-      "title": "Compiler Pipeline",
-      "summary": "Source code flows through a lexer, parser, type checker, and generator before execution. Each phase is isolated so errors stay precise and the implementation stays easy to evolve."
-    },
-    {
-      "id": "lsp",
-      "title": "LSP Features",
-      "summary": "The IDE uses a standalone language server over WebSocket to provide diagnostics, hover, completion, definition lookup, and document symbols in near real time."
-    },
-    {
-      "id": "runtime",
-      "title": "Execution Model",
-      "summary": "Compiled JavaScript is executed in a constrained sandbox path exposed through the IDE. Compile errors are shown before runtime, and runtime output is streamed back to the UI."
+      "id": "types",
+      "title": "Types and coercion",
+      "summary": "Types are inferred from the first assignment. Reassignment and operators must match those types exactly."
     }
   ],
   "principles": [
     {
+      "title": "No implicit coercion",
+      "text": "J++ never silently converts between number and string. Invalid mixes fail at compile time."
+    },
+    {
       "title": "Deterministic arithmetic",
-      "text": "+, -, *, and / are numeric operators only."
+      "text": "+, -, *, and / accept number operands only."
     },
     {
       "title": "Deterministic text",
-      "text": ". is reserved for string concatenation only."
+      "text": ". concatenates strings only—it is not overloaded for numbers."
     },
     {
-      "title": "Compile-time feedback",
-      "text": "Type mismatches are surfaced before execution begins."
-    },
-    {
-      "title": "Stable variables",
-      "text": "A variable keeps the type from its first assignment."
+      "title": "Stable variable types",
+      "text": "A variable keeps the type from its first ye assignment; later values must match."
     }
   ],
   "syntaxExample": "ye a = 5\nye b = 10\nye total = a + b\nbol total\n\nye first = \"hello\"\nye second = \"world\"\nbol first . \" \" . second",
@@ -57,28 +47,28 @@
     ["-", "number - number", "Numeric subtraction only."],
     ["*", "number * number", "Numeric multiplication only."],
     ["/", "number / number", "Numeric division only."],
-    [".", "string . string", "String concatenation only."],
-    ["== != < > <= >=", "Comparable operands", "Used in conditions and loop guards."]
+    [".", "string . string", "String concatenation only—not numeric addition."],
+    ["== != < > <= >=", "number or string (same type both sides)", "Comparisons require matching operand types."]
   ],
   "keywordGroups": [
     {
       "title": "Core statements",
       "items": [
-        ["ye", "Declare a variable and let J++ infer its type from the first assignment."],
-        ["bol", "Print a value to the output panel."],
+        ["ye", "Declare a variable; type is inferred from the first assignment."],
+        ["bol", "Print a value."],
         ["agar", "Start an if condition."],
-        ["nahi", "Define the else branch."],
-        ["nahi agar", "Add an else-if branch."]
+        ["nahi", "Else branch."],
+        ["nahi agar", "Else-if branch."]
       ]
     },
     {
       "title": "Loops and control",
       "items": [
-        ["jabtak", "Run a while loop while the condition is true."],
-        ["ke liye", "Run a counted for loop."],
-        ["tak", "Set the exclusive upper bound in a for loop."],
-        ["break", "Exit the current loop immediately."],
-        ["continue", "Skip to the next loop iteration."]
+        ["jabtak", "While loop while the condition is true."],
+        ["ke liye", "Counted for loop."],
+        ["tak", "Exclusive upper bound in a for loop."],
+        ["break", "Exit the current loop."],
+        ["continue", "Skip to the next iteration."]
       ]
     }
   ],
@@ -89,97 +79,48 @@
     "Additive expressions: + and -.",
     "Comparisons: ==, !=, <, >, <=, >=."
   ],
-  "compileExample": "Source code\n  -> lexer\n  -> parser\n  -> type checker\n  -> JavaScript generator\n  -> execution",
-  "compilerStages": [
-    {
-      "title": "Lexer",
-      "text": "Converts source code into tokens and tracks exact line and column positions for diagnostics and editor features."
-    },
-    {
-      "title": "Parser",
-      "text": "Builds the abstract syntax tree with recursive descent parsing and preserves the structure needed for precedence and blocks."
-    },
-    {
-      "title": "Type checker",
-      "text": "Infers expression types, validates assignments, manages symbol information, and throws descriptive errors when rules are broken."
-    },
-    {
-      "title": "Generator",
-      "text": "Emits JavaScript only after the program is known to be valid, keeping code generation intentionally simple."
-    }
-  ],
-  "lspFeatures": [
-    {
-      "title": "Diagnostics",
-      "text": "Errors are pushed after open and change events, not just after clicking run."
-    },
-    {
-      "title": "Hover",
-      "text": "Keyword docs, operator meaning, and variable type info appear directly in the editor."
-    },
-    {
-      "title": "Completion",
-      "text": "The server returns both keyword suggestions and in-scope variables."
-    },
-    {
-      "title": "Definition and symbols",
-      "text": "Users can jump to declarations and inspect document symbols for faster navigation."
-    }
-  ],
-  "lifecycleSteps": [
-    ["1. initialize", "The editor connects to the language server and negotiates capabilities."],
-    ["2. didOpen / didChange", "The editor sends the full file so the server always has the latest source in memory."],
-    ["3. analyze", "The server runs lexer, parser, and type checking on the current document."],
-    ["4. publishDiagnostics", "Errors are pushed back to the editor as squiggles and problem entries."],
-    ["5. hover / completion / definition / documentSymbol", "Interactive editor requests are answered on demand."]
-  ],
-  "implementationDetails": [
-    {
-      "title": "0-indexed vs 1-indexed positions",
-      "text": "LSP positions are 0-indexed, while the compiler tracks line and column numbers from 1. The server converts values at the transport boundary."
-    },
-    {
-      "title": "Full document sync",
-      "text": "On each change the client sends the full file. That is simpler than incremental sync and is acceptable for small J++ files."
-    },
-    {
-      "title": "Debounced diagnostics",
-      "text": "Diagnostics are delayed slightly so the compiler is not re-run on every keystroke while the user is actively typing."
-    },
-    {
-      "title": "Shared semantics",
-      "text": "The IDE and the LSP server both rely on the same compiler modules, which keeps hover, squiggles, and execution behavior consistent."
-    }
-  ],
-  "runtime": {
-    "execution": "After a successful compile, the generated JavaScript is executed through the IDE runtime path. The user sees compiled output, runtime output, and compile errors in separate views, which makes the pipeline easier to understand while debugging.",
-    "assistant": "The chat button on this page uses the documentation retrieval path behind /api/chat. Ask about syntax, operators, compiler behavior, or LSP features to get grounded answers from the project documentation."
+  "typeCoercion": {
+    "summary": "J++ has no implicit type coercion. Unlike JavaScript, expressions like 5 + \"hi\" or \"3\" + 4 are compile errors, not silent conversions.",
+    "rules": [
+      {
+        "title": "Two primitive types",
+        "text": "Only number and string exist. Types are inferred from literals (5, 3.14, \"text\") on declaration."
+      },
+      {
+        "title": "Assignment must match",
+        "text": "After ye x = 5, assigning a string to x fails: \"Type mismatch: cannot assign string to x (declared as number)\"."
+      },
+      {
+        "title": "Operators are type-locked",
+        "text": "+ - * / require both operands to be number. . requires both operands to be string."
+      },
+      {
+        "title": "No string–number mixing",
+        "text": "You cannot use + to concatenate strings or . to join numbers. Pick the operator that matches the types."
+      },
+      {
+        "title": "Comparisons need consistent types",
+        "text": "Compare numbers to numbers and strings to strings. Mixed-type comparisons are rejected."
+      }
+    ],
+    "validExample": "ye count = 2\nye label = \"items\"\nye next = count + 1\nye msg = label . \": \" . \"ready\"\nbol msg",
+    "invalidExample": "ye x = 5\nx = \"wrong\"\n\nye a = 1\nye b = \"2\"\nye bad = a + b\n\nye s = \"hi\"\nye also = s + 1"
   },
   "documents": [
     {
       "source": "docs:language",
       "title": "J++ Language",
-      "text": "J++ is a small strictly typed language that compiles to JavaScript. It removes JavaScript-style implicit coercion, so arithmetic and string operations stay predictable. The language focuses on deterministic arithmetic, deterministic text handling, compile-time feedback, and stable variable types."
+      "text": "J++ is a small strictly typed language that compiles to JavaScript. It removes JavaScript-style implicit coercion. Design goals: deterministic arithmetic (+ - * / on numbers only), deterministic text (. on strings only), compile-time type feedback, and stable variable types from first assignment."
     },
     {
       "source": "docs:syntax",
-      "title": "Syntax and Types",
-      "text": "J++ currently supports two primitive types: number and string. Variables keep the type from their first assignment, and invalid reassignment is rejected at compile time. The keyword ye declares variables, bol prints output, agar starts an if condition, nahi defines else, nahi agar adds else-if branches, jabtak creates while loops, ke liye creates counted for loops, tak sets the exclusive upper bound, break exits a loop, and continue skips to the next iteration. The +, -, *, and / operators are numeric only. The . operator is string concatenation only. Comparison operators include ==, !=, <, >, <=, and >=."
+      "title": "Syntax and keywords",
+      "text": "Keywords: ye (declare), bol (print), agar (if), nahi (else), nahi agar (else-if), jabtak (while), ke liye (for), tak (for bound), break, continue. Operators: + - * / numeric only; . string concat only; == != < > <= >= for comparisons. Precedence: primary, then * /, then ., then + -, then comparisons."
     },
     {
-      "source": "docs:compiler",
-      "title": "Compiler Pipeline",
-      "text": "Source code flows through a lexer, parser, type checker, and generator before execution. The lexer converts source into tokens and tracks line and column positions. The parser builds the abstract syntax tree with recursive descent parsing. The type checker infers expression types, validates assignments, manages symbol information, and reports descriptive errors. The generator emits JavaScript only after the program is valid."
-    },
-    {
-      "source": "docs:lsp",
-      "title": "LSP Features",
-      "text": "The IDE uses a standalone language server over WebSocket to provide diagnostics, hover, completion, definition lookup, and document symbols. The editor connects with initialize, sends full-file didOpen and didChange updates, and receives publishDiagnostics notifications after analysis. Hover shows keyword docs, operator meaning, and variable type information. Completion returns keywords and in-scope variables. Definition and document symbols improve navigation. LSP positions are 0-indexed while compiler positions are 1-indexed, and the server converts between them."
-    },
-    {
-      "source": "docs:runtime",
-      "title": "Execution Model",
-      "text": "After a successful compile, the generated JavaScript is executed through the IDE runtime path. Users can inspect source code, compiled JavaScript, output, and problems in separate views. The docs assistant uses the /api/chat retrieval path and answers questions about syntax, operators, compiler behavior, and LSP features using the same documentation source."
+      "source": "docs:types",
+      "title": "Types and coercion",
+      "text": "Primitive types: number and string, inferred on ye. No implicit coercion. Assignment to an existing variable must match its declared type. + - * / require number operands. . requires string operands. Cannot assign string to a number variable or vice versa. Examples of errors: number + string, string + number, reassigning ye x = 5 with a string."
     }
   ]
 }

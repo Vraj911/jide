@@ -96,12 +96,12 @@ export const jppLightTheme = {
   base: 'vs',
   inherit: true,
   rules: [
-    { token: 'keyword', foreground: '0066cc', fontStyle: 'bold' }, // Darker sky blue for light mode
-    { token: 'string', foreground: '008000' }, // Darker green for readability
-    { token: 'number', foreground: 'ff6600' }, // Orange
-    { token: 'comment', foreground: '808080', fontStyle: 'italic' }, // Gray
-    { token: 'operator', foreground: '0066cc' }, // Sky blue
-    { token: 'identifier', foreground: '1f2937' }, // Dark gray/black
+    { token: 'keyword', foreground: '0066cc', fontStyle: 'bold' }, 
+    { token: 'string', foreground: '008000' }, 
+    { token: 'number', foreground: 'ff6600' }, 
+    { token: 'comment', foreground: '808080', fontStyle: 'italic' }, 
+    { token: 'operator', foreground: '0066cc' }, 
+    { token: 'identifier', foreground: '1f2937' }, 
   ],
   colors: {
     'editor.background': '#ffffff',

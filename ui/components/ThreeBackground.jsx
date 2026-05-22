@@ -1,23 +1,17 @@
 "use client";
-
 import { useEffect, useRef } from "react";
-
 export function ThreeBackground({ variant = "particles" }) {
   const containerRef = useRef(null);
-
   useEffect(() => {
     if (!containerRef.current) return undefined;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
-
     let rafId = null;
     let initTimeoutId = null;
     let cancelled = false;
     let cleanup = null;
-
     const start = async () => {
       const THREE = await import("three");
       if (cancelled || !containerRef.current) return;
-
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
       const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, powerPreference: "low-power" });
@@ -26,14 +20,12 @@ export function ThreeBackground({ variant = "particles" }) {
       renderer.setClearColor(0x000000, 0);
       containerRef.current.appendChild(renderer.domElement);
       camera.position.z = 5;
-
       let particles;
       let geometry;
       let material;
       let lines = null;
       let lineGeometry = null;
       let lineMaterial = null;
-
       if (variant === "particles") {
         geometry = new THREE.BufferGeometry();
         const particlesCount = 1200;
@@ -50,7 +42,6 @@ export function ThreeBackground({ variant = "particles" }) {
         });
         particles = new THREE.Points(geometry, material);
         scene.add(particles);
-
         lineGeometry = new THREE.BufferGeometry();
         lineMaterial = new THREE.LineBasicMaterial({
           color: 0x00d9ff,
@@ -90,14 +81,12 @@ export function ThreeBackground({ variant = "particles" }) {
         particles = new THREE.Points(geometry, material);
         scene.add(particles);
       }
-
       const handleResize = () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
       };
       window.addEventListener("resize", handleResize);
-
       let mouseX = 0;
       let mouseY = 0;
       const handleMouseMove = (event) => {
@@ -105,7 +94,6 @@ export function ThreeBackground({ variant = "particles" }) {
         mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
       };
       window.addEventListener("mousemove", handleMouseMove, { passive: true });
-
       const animate = () => {
         rafId = requestAnimationFrame(animate);
         particles.rotation.x += 0.0008;
@@ -116,7 +104,6 @@ export function ThreeBackground({ variant = "particles" }) {
         renderer.render(scene, camera);
       };
       animate();
-
       cleanup = () => {
         window.removeEventListener("resize", handleResize);
         window.removeEventListener("mousemove", handleMouseMove);
@@ -132,10 +119,8 @@ export function ThreeBackground({ variant = "particles" }) {
         renderer.dispose();
       };
     };
-
     const startDelayMs = 180;
     initTimeoutId = window.setTimeout(start, startDelayMs);
-
     return () => {
       cancelled = true;
       if (initTimeoutId) clearTimeout(initTimeoutId);

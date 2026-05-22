@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import {
   Dialog,
@@ -13,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-
 export function Settings({
   open,
   onOpenChange,
@@ -22,20 +20,16 @@ export function Settings({
   onThemeChange,
 }) {
   const [localSettings, setLocalSettings] = useState(settings);
-
   useEffect(() => {
     setLocalSettings(settings);
   }, [settings, open]);
-
   const handleSave = () => {
     onSettingsChange(localSettings);
-    // Update theme if it changed
     if (localSettings.theme !== settings.theme) {
       onThemeChange(localSettings.theme);
     }
     onOpenChange(false);
   };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] w-[calc(100vw-2rem)] max-w-2xl overflow-y-auto">
@@ -45,12 +39,9 @@ export function Settings({
             Configure your IDE preferences
           </DialogDescription>
         </DialogHeader>
-
         <div className="space-y-6 py-4">
-          {/* Editor Settings */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Editor Settings</h3>
-            
             <div className="space-y-2">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Label htmlFor="theme">Theme</Label>
@@ -61,14 +52,12 @@ export function Settings({
                     const newTheme = e.target.value;
                     setLocalSettings({ ...localSettings, theme: newTheme });
                   }}
-                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm sm:w-auto"
-                >
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm sm:w-auto">
                   <option value="dark">Dark</option>
                   <option value="light">Light</option>
                 </select>
               </div>
             </div>
-
             <div className="space-y-2">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Label htmlFor="fontSize">Font Size</Label>
@@ -88,7 +77,6 @@ export function Settings({
                 />
               </div>
             </div>
-
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="wordWrap">Word Wrap</Label>
@@ -101,7 +89,6 @@ export function Settings({
                 />
               </div>
             </div>
-
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="minimap">Show Minimap</Label>
@@ -115,13 +102,9 @@ export function Settings({
               </div>
             </div>
           </div>
-
           <Separator />
-
-          {/* Execution Settings */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Execution Settings</h3>
-            
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="clearOutput">Clear Output Before Run</Label>
@@ -134,7 +117,6 @@ export function Settings({
                 />
               </div>
             </div>
-
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="autoRun">Auto Run on Compile</Label>
@@ -148,13 +130,9 @@ export function Settings({
               </div>
             </div>
           </div>
-
           <Separator />
-
-          {/* Panel Visibility */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Panel Visibility</h3>
-            
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="showCompiled">Show Compiled Code Panel</Label>
@@ -167,7 +145,6 @@ export function Settings({
                 />
               </div>
             </div>
-
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="showProblems">Show Problems Panel</Label>
@@ -182,7 +159,6 @@ export function Settings({
             </div>
           </div>
         </div>
-
         <div className="flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel

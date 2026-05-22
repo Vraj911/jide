@@ -40,36 +40,30 @@ export default function Home() {
                 </Link>
               </div>
             </div>
-            <div className="glass-panel space-y-4 overflow-hidden rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Terminal className="h-4 w-4" />
-                <span>main.jpp</span>
-              </div>
-              <pre className="overflow-x-auto text-xs sm:text-sm md:text-base">
-                <code className="text-code-keyword">print</code>
-                <code className="text-code-string"> "Hello, World!"</code>
-                {"\n\n"}
-                <code className="text-code-keyword">var</code>
-                <code> x = </code>
-                <code className="text-code-number">42</code>
-                {"\n"}
-                <code className="text-code-keyword">print</code>
-                <code> x</code>
-                {"\n\n"}
-                <code className="text-code-keyword">func</code>
-                <code> greet(name) {"{"}</code>
-                {"\n  "}
-                <code className="text-code-keyword">print</code>
-                <code className="text-code-string"> "Hello, "</code>
-                <code> + name</code>
-                {"\n"}
-                <code>{"}"}</code>
-              </pre>
-              <div className="flex items-center gap-2 pt-4 border-t border-border/50">
-                <div className="h-2 w-2 rounded-full bg-terminal-fg animate-pulse" />
-                <span className="text-sm text-terminal-fg">Output: Hello, World!</span>
-              </div>
-            </div>
+           <div className="glass-panel space-y-4 overflow-hidden rounded-xl p-4 sm:p-6">
+  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+    <Terminal className="h-4 w-4" />
+    <span>main.jpp</span>
+  </div>
+  <pre className="overflow-x-auto text-xs sm:text-sm md:text-base">
+    <code className="text-code-keyword">ye</code>
+    <code> name = </code>
+    <code className="text-code-string">"Vraj"</code>
+    {"\n"}
+    <code className="text-code-keyword">ye</code>
+    <code> age = </code>
+    <code className="text-code-number">21</code>
+    {"\n"}
+    <code className="text-code-keyword">bol</code>
+    <code className="text-code-string"> "Hello, " </code>
+    <code className="text-code-keyword">.</code>
+    <code> name</code>
+  </pre>
+  <div className="flex items-center gap-2 pt-4 border-t border-border/50">
+    <div className="h-2 w-2 rounded-full bg-terminal-fg animate-pulse" />
+    <span className="text-sm text-terminal-fg">Output: Hello, Vraj</span>
+  </div>
+</div>
           </div>
         </div>
       </section>
